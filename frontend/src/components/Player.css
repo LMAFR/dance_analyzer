@@ -190,8 +190,16 @@
 .player.swapped .stage.fs .overlay-graphs { top: 0; left: 0; right: 0; bottom: 0; width: auto; padding: 3vh 3vw 12vh; gap: 12px; }
 
 @media (max-width: 880px) {
-  .player { grid-template-columns: 1fr; grid-template-areas: "main" "side1" "rail" "side2" "trans"; }
-  .player.swapped { grid-template-areas: "main" "vid" "rail" "opts" "trans"; }
+  /* Both columns AND areas must collapse — .player.swapped's own column rule has
+     higher specificity than ".player", so it must be reset explicitly here too. */
+  .player {
+    grid-template-columns: 1fr;
+    grid-template-areas: "main" "side1" "rail" "side2" "trans";
+  }
+  .player.swapped {
+    grid-template-columns: 1fr;
+    grid-template-areas: "main" "vid" "rail" "opts" "trans";
+  }
   .area-video.stage:not(.fs) { height: auto; width: 100%; max-height: 60vh; }
   .player.swapped .area-video.stage:not(.fs) { height: auto; max-height: 40vh; }
   /* On phones a lone featured graph wrapped to 3 tall rows is overkill. */

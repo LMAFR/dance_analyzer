@@ -74,6 +74,7 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   const [exporting, setExporting] = useState(false);
   const [view, setView] = useState<{ start: number; end: number } | null>(null); // zoom/pan window
   const [vh, setVh] = useState(typeof window !== 'undefined' ? window.innerHeight : 800);
+  const [vw, setVw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280);
   const [pip, setPip] = useState<Pip | null>(null);
   const [beatBarH, setBeatBarH] = useState(0);
   const beatRef = useRef<HTMLDivElement>(null);
@@ -116,7 +117,7 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   }, [videoUrl]);
 
   useEffect(() => {
-    const onResize = () => setVh(window.innerHeight);
+    const onResize = () => { setVh(window.innerHeight); setVw(window.innerWidth); };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
@@ -467,7 +468,9 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
         ref={stageRef}
         style={{
           aspectRatio: fullscreen ? undefined : videoAspect,
-          height: !fullscreen && swapped ? swappedVideoH : undefined,
+          // The desktop two-column height math doesn't apply once the layout
+          // collapses to one column on phones (CSS handles it there).
+          height: !fullscreen && swapped && vw > 880 ? swappedVideoH : undefined,
         }}
       >
         <div
