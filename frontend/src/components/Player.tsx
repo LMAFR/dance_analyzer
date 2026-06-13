@@ -36,6 +36,16 @@ const MaximizeIcon = () => (
   </svg>
 );
 
+const KebabIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="12" cy="5" r="2" />
+    <circle cx="12" cy="12" r="2" />
+    <circle cx="12" cy="19" r="2" />
+  </svg>
+);
+
+const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2];
+
 const LoopIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -79,6 +89,9 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   const [pickMode, setPickMode] = useState<PickMode>('none');
   const [loopRegion, setLoopRegion] = useState<{ start: number; end: number } | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [rate, setRate] = useState(1);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<{ start: number; end: number } | null>(null); // zoom/pan window
   // Drag-to-loop is opt-in (off by default on phones, so a drag doesn't make a
   // loop and single-finger drag stays free; two-finger pinch still zooms).
@@ -265,6 +278,21 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
       setExporting(false);
     }
   }, [trackId, loopRegion, duration, stems, muted]);
+
+  const changeRate = useCallback((r: number) => {
+    engineRef.current?.setRate(r);
+    setRate(r);
+  }, []);
+
+  // Close the ⋮ menu on an outside click.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [menuOpen]);
 
   // PiP drag / resize. Pointer capture is tracked and released defensively:
   // Firefox can drop the implicit pointerup release when the captured subtree
@@ -491,15 +519,36 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
         <span className="btn-icon"><LoopIcon /></span>
         <span className="btn-label">{loopEnabled ? 'Loop on' : 'Loop off'}</span>
       </button>
-      <button
-        className="btn"
-        onClick={onExport}
-        disabled={exporting || loading}
-        title="Download the looped section (or whole track) with the audible layers"
-      >
-        <span className="btn-icon">⤓</span>
-        <span className="btn-label">{exporting ? 'Exporting…' : 'Export'}</span>
-      </button>
+      <div className="menu-wrap" ref={menuRef}>
+        <button
+          className={menuOpen ? 'btn active' : 'btn'}
+          onClick={() => setMenuOpen((o) => !o)}
+          disabled={loading}
+          title="More: export & playback speed"
+        >
+          <span className="btn-icon"><KebabIcon /></span>
+        </button>
+        {menuOpen && (
+          <div className="menu-pop">
+            <button className="menu-item" onClick={() => { setMenuOpen(false); onExport(); }} disabled={exporting}>
+              ⤓ {exporting ? 'Exporting…' : 'Export clip'}
+            </button>
+            <div className="menu-sep" />
+            <div className="menu-label">Speed</div>
+            <div className="speed-row">
+              {SPEEDS.map((s) => (
+                <button
+                  key={s}
+                  className={rate === s ? 'speed-btn active' : 'speed-btn'}
+                  onClick={() => changeRate(s)}
+                >
+                  {s}×
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
       <button className="btn" onClick={toggleFullscreen} title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
         <span className="btn-icon"><MaximizeIcon /></span>
         <span className="btn-label">{fullscreen ? 'Exit FS' : 'Fullscreen'}</span>

@@ -58,6 +58,8 @@ export class AudioEngine {
   private rafId: number | null = null;
   /** Active loop region (s), or null. Playback wraps to start at the loop end. */
   private loopRegion: { start: number; end: number } | null = null;
+  /** Playback speed (1 = normal). */
+  private _rate = 1;
 
   /** Total media duration (s) — min across stems. */
   duration = 0;
@@ -142,7 +144,25 @@ export class AudioEngine {
   /** Current media time, derived from the audio master clock while playing. */
   get currentTime(): number {
     if (!this.playing) return this.startOffset;
-    return this.startOffset + (this.ctx.currentTime - this.startCtxTime);
+    return this.startOffset + (this.ctx.currentTime - this.startCtxTime) * this._rate;
+  }
+
+  get rate() {
+    return this._rate;
+  }
+
+  /** Set playback speed (e.g. 0.5, 1, 1.5). Pitch shifts (no time-stretch). */
+  setRate(r: number) {
+    const clamped = Math.max(0.1, Math.min(4, r));
+    // Re-anchor the clock so the current position doesn't jump.
+    const t = this.currentTime;
+    this.startOffset = t;
+    this.startCtxTime = this.ctx.currentTime;
+    this._rate = clamped;
+    for (const stem of this.stems.values()) {
+      if (stem.source) stem.source.playbackRate.value = clamped;
+    }
+    this.video.playbackRate = clamped;
   }
 
   /** Set (or update) the loop region. Jumps into it if currently outside. */
@@ -173,7 +193,7 @@ export class AudioEngine {
     }
     this.startSourcesAt(this.startOffset);
     this.video.currentTime = this.startOffset;
-    this.video.playbackRate = 1;
+    this.video.playbackRate = this._rate;
     await this.video.play().catch(() => {});
     this.playing = true;
     this.loop();
@@ -212,6 +232,7 @@ export class AudioEngine {
     for (const stem of this.stems.values()) {
       const src = this.ctx.createBufferSource();
       src.buffer = stem.buffer;
+      src.playbackRate.value = this._rate;
       src.connect(stem.gain);
       src.start(this.startCtxTime, offset);
       stem.source = src;
@@ -251,17 +272,17 @@ export class AudioEngine {
       return;
     }
 
-    // Slave the video to the audio clock.
+    // Slave the video to the audio clock (nudging around the base playback rate).
     const drift = this.video.currentTime - audioTime; // +ve: video ahead
     const abs = Math.abs(drift);
     if (abs > this.opts.hardDriftThreshold) {
       this.video.currentTime = audioTime;
-      this.video.playbackRate = 1;
+      this.video.playbackRate = this._rate;
     } else if (abs > this.opts.softDriftThreshold) {
       // Nudge: if video is behind, speed it up slightly, and vice versa.
-      this.video.playbackRate = 1 - drift * this.opts.correctionGain;
+      this.video.playbackRate = this._rate * (1 - drift * this.opts.correctionGain);
     } else {
-      this.video.playbackRate = 1;
+      this.video.playbackRate = this._rate;
     }
 
     this.onTick?.(audioTime);

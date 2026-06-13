@@ -129,6 +129,39 @@
 .transport .time { font-variant-numeric: tabular-nums; color: #fff; font-size: 13px; min-width: 132px; }
 .scrub { flex: 1; accent-color: #4f9dff; }
 
+/* ⋮ menu (export + speed) */
+.menu-wrap { position: relative; display: inline-flex; }
+.menu-pop {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  min-width: 188px;
+  background: #11141c;
+  border: 1px solid #2c3647;
+  border-radius: 10px;
+  padding: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.menu-item {
+  background: #1b2230; color: #cfd6e4; border: 1px solid #2c3647;
+  border-radius: 6px; padding: 7px 10px; font-size: 13px; cursor: pointer; text-align: left;
+}
+.menu-item:hover { background: #232c3d; }
+.menu-item:disabled { opacity: 0.6; cursor: default; }
+.menu-sep { height: 1px; background: #1c2330; margin: 2px 0; }
+.menu-label { font-size: 11px; color: #7c869a; padding: 0 2px; }
+.speed-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.speed-btn {
+  background: #1b2230; color: #cfd6e4; border: 1px solid #2c3647;
+  border-radius: 6px; padding: 5px 0; font-size: 12px; cursor: pointer;
+}
+.speed-btn:hover { background: #232c3d; }
+.speed-btn.active { background: #4f9dff; border-color: #4f9dff; color: #07101f; }
+
 /* Buttons */
 .btn {
   background: #1b2230; color: #cfd6e4; border: 1px solid #2c3647; border-radius: 6px;
