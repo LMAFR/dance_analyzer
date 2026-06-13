@@ -72,6 +72,7 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   const [pickMode, setPickMode] = useState<PickMode>('none');
   const [loopRegion, setLoopRegion] = useState<{ start: number; end: number } | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [view, setView] = useState<{ start: number; end: number } | null>(null); // zoom/pan window
   const [vh, setVh] = useState(typeof window !== 'undefined' ? window.innerHeight : 800);
   const [pip, setPip] = useState<Pip | null>(null);
   const [beatBarH, setBeatBarH] = useState(0);
@@ -140,7 +141,9 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   const pipActive = fullscreen && swapped;
   useEffect(() => {
     if (pipActive && !pip) {
-      const w = Math.round(window.innerWidth * 0.12); // small PiP
+      // Bigger by default on phones (12% is unusably small there).
+      const frac = window.innerWidth < 640 ? 0.4 : 0.12;
+      const w = Math.round(window.innerWidth * frac);
       // Sit lower and a bit further left so it clears each graph's expand/mute buttons.
       const margin = Math.round(window.innerWidth * 0.07);
       setPip({ x: window.innerWidth - w - margin, y: Math.round(window.innerHeight * 0.12), w });
@@ -290,6 +293,24 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
     capture(e.currentTarget as HTMLElement, e.pointerId);
   };
 
+  // Shared zoom/pan window across all graphs (clamped; full window -> null).
+  const onViewChange = useCallback(
+    (start: number, end: number) => {
+      const dur = duration || 0;
+      const MIN = 0.25;
+      let s = Math.max(0, Math.min(start, end));
+      let e = Math.min(dur, Math.max(start, end));
+      if (e - s < MIN) {
+        const c = (s + e) / 2;
+        s = Math.max(0, c - MIN / 2);
+        e = Math.min(dur, s + MIN);
+      }
+      if (e - s >= dur - 0.01) setView(null); // fully zoomed out -> full view
+      else setView({ start: s, end: e });
+    },
+    [duration]
+  );
+
   const markers = useMemo(() => computeStepMarkers(beatCfg, duration), [beatCfg, duration]);
 
   const isActive = (id: string) => !muted[id];
@@ -302,6 +323,7 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
     label: s.label, color: s.color, envelope: envelopes[s.id] ?? [],
     currentTime: time, duration, active: isActive(s.id), onSeek: seek,
     markers, loopRegion, onSelectRegion, pickMode: pickMode !== 'none', onPick,
+    onViewChange,
   });
 
   const graphControls = (id: string, inMain: boolean) => (
@@ -326,7 +348,13 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   const renderGraphs = (list: StemConfig[], overlay: boolean, height: number) =>
     list.map((s) => (
       <div className="graph-wrap" key={s.id}>
-        <IntensityGraph {...graphProps(s)} overlay={overlay} height={height} />
+        <IntensityGraph
+          {...graphProps(s)}
+          overlay={overlay}
+          height={height}
+          tStart={view?.start}
+          tEnd={view?.end}
+        />
         {graphControls(s.id, swapped && featured.has(s.id))}
       </div>
     ));
@@ -366,7 +394,9 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   // screen (swapped); otherwise it's a small overlay floating on the video.
   const renderMain = (overlay: boolean) => {
     const big = !overlay || swapped;
-    if (featuredStems.length === 1) {
+    // A lone graph wraps to 3 rows only at full view; once zoomed/panned it
+    // becomes a single windowed graph the user can pan/zoom freely.
+    if (featuredStems.length === 1 && !view) {
       const rowH = big
         ? Math.max(80, Math.floor((overlay ? vh - 200 : vh - 280) / WRAP_ROWS))
         : 64;
@@ -398,12 +428,20 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   const transport = (
     <div className="transport">
       <button className="btn play" onClick={togglePlay} disabled={loading}>{playing ? '❚❚' : '▶'}</button>
-      <span className="time">{fmtTime(time)} / {fmtTime(duration)}</span>
+      <span className="time">
+        <span className="t-cur">{fmtTime(time)}</span>
+        <span className="t-tot"> / {fmtTime(duration)}</span>
+      </span>
       <input className="scrub" type="range" min={0} max={duration || 0} step={0.001}
         value={time} onChange={(e) => seek(Number(e.target.value))} />
       {loopRegion && (
         <button className="btn loop-active" onClick={clearLoop} title="Stop looping">
-          🔁 {fmtTime(loopRegion.start)}–{fmtTime(loopRegion.end)} ✕
+          🔁 <span className="loop-range">{fmtTime(loopRegion.start)}–{fmtTime(loopRegion.end)} </span>✕
+        </button>
+      )}
+      {view && (
+        <button className="btn" onClick={() => setView(null)} title="Reset zoom (fit all)">
+          <span className="btn-icon fit">FIT</span>
         </button>
       )}
       <button
@@ -412,9 +450,13 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
         disabled={exporting || loading}
         title="Download the looped section (or whole track) with the audible layers"
       >
-        {exporting ? 'Exporting…' : '⤓ Export'}
+        <span className="btn-icon">⤓</span>
+        <span className="btn-label">{exporting ? 'Exporting…' : 'Export'}</span>
       </button>
-      <button className="btn" onClick={toggleFullscreen}>{fullscreen ? 'Exit FS' : 'Fullscreen'}</button>
+      <button className="btn" onClick={toggleFullscreen} title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
+        <span className="btn-icon"><MaximizeIcon /></span>
+        <span className="btn-label">{fullscreen ? 'Exit FS' : 'Fullscreen'}</span>
+      </button>
     </div>
   );
 

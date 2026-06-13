@@ -22,6 +22,8 @@ interface IntensityGraphProps {
       graph across several rows at higher horizontal resolution. */
   tStart?: number;
   tEnd?: number;
+  /** Zoom/pan: report a new visible time window from pinch / wheel gestures. */
+  onViewChange?: (start: number, end: number) => void;
 }
 
 const DRAG_PX = 5;
@@ -55,6 +57,7 @@ export function IntensityGraph({
   fill = false,
   tStart,
   tEnd,
+  onViewChange,
 }: IntensityGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragStart = useRef<number | null>(null);
@@ -62,6 +65,10 @@ export function IntensityGraph({
   const [hoverPx, setHoverPx] = useState<number | null>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
   const [settled, setSettled] = useState(false);
+  // Multi-touch pinch/pan state.
+  const pointers = useRef<Map<number, number>>(new Map()); // id -> clientX
+  const pinch = useRef<{ dist: number; mid: number } | null>(null);
+  const wasGesture = useRef(false);
 
   // Redraw sharply whenever the canvas is resized (avoids the blurry-then-sharp race).
   useEffect(() => {
@@ -222,29 +229,69 @@ export function IntensityGraph({
     return winStart + frac * (winEnd - winStart);
   };
 
+  // --- Pinch / pan (two fingers) + wheel zoom, reported via onViewChange. ---
+  const pinchState = (rect: DOMRect) => {
+    const xs = [...pointers.current.values()].map((cx) => cx - rect.left);
+    return { dist: Math.abs(xs[0] - xs[1]) || 1, mid: (xs[0] + xs[1]) / 2 };
+  };
+
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (duration <= 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
+    pointers.current.set(e.pointerId, e.clientX);
+    e.currentTarget.setPointerCapture(e.pointerId);
+    if (pointers.current.size === 2) {
+      // Enter pinch/pan; cancel any single-finger drag-select.
+      wasGesture.current = true;
+      dragStart.current = null;
+      setDragPx(null);
+      pinch.current = pinchState(rect);
+      return;
+    }
     const x = e.clientX - rect.left;
     dragStart.current = x;
     if (onSelectRegion) setDragPx({ a: x, b: x });
-    e.currentTarget.setPointerCapture(e.pointerId);
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
+    if (pointers.current.has(e.pointerId)) pointers.current.set(e.pointerId, e.clientX);
+
+    if (pointers.current.size >= 2 && pinch.current && onViewChange) {
+      const w = rect.width;
+      const span = winEnd - winStart;
+      const next = pinchState(rect);
+      const factor = pinch.current.dist / next.dist; // fingers apart -> zoom in
+      // Pan so content follows the fingers' midpoint, then zoom about the new mid.
+      const panned = winStart - ((next.mid - pinch.current.mid) / w) * span;
+      const center = panned + (next.mid / w) * span;
+      const newSpan = span * factor;
+      const newStart = center - (next.mid / w) * newSpan;
+      onViewChange(newStart, newStart + newSpan);
+      pinch.current = next;
+      return;
+    }
+
     const x = e.clientX - rect.left;
     setHoverPx(x);
     if (dragStart.current !== null && onSelectRegion) setDragPx({ a: dragStart.current, b: x });
   };
 
   const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (dragStart.current === null) return;
     const rect = e.currentTarget.getBoundingClientRect();
+    pointers.current.delete(e.pointerId);
+    if (pointers.current.size < 2) pinch.current = null;
+
+    if (dragStart.current === null) {
+      // Don't treat lifting a pinch finger as a click.
+      if (pointers.current.size === 0) wasGesture.current = false;
+      return;
+    }
     const x0 = dragStart.current;
     const x1 = e.clientX - rect.left;
     dragStart.current = null;
     setDragPx(null);
+    if (wasGesture.current) { wasGesture.current = false; return; }
 
     if (Math.abs(x1 - x0) < DRAG_PX || !onSelectRegion) {
       const t = timeAtX(e.clientX, rect);
@@ -257,6 +304,20 @@ export function IntensityGraph({
     }
   };
 
+  const onWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    if (!onViewChange || duration <= 0) return;
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const frac = clamp((e.clientX - rect.left) / rect.width, 0, 1);
+    const span = winEnd - winStart;
+    const center = winStart + frac * span;
+    const newSpan = span * Math.exp(e.deltaY * 0.0015);
+    const newStart = center - frac * newSpan;
+    onViewChange(newStart, newStart + newSpan);
+  };
+
+  const onDoubleClick = () => onViewChange?.(0, duration); // reset zoom
+
   return (
     <div className="ig-wrap" style={{ height: fill ? '100%' : height }}>
       <canvas
@@ -264,7 +325,10 @@ export function IntensityGraph({
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
         onPointerLeave={() => setHoverPx(null)}
+        onWheel={onViewChange ? onWheel : undefined}
+        onDoubleClick={onDoubleClick}
         style={{
           width: '100%',
           height: '100%',

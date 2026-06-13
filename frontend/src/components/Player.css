@@ -133,7 +133,10 @@
 .btn {
   background: #1b2230; color: #cfd6e4; border: 1px solid #2c3647; border-radius: 6px;
   padding: 4px 10px; font-size: 12px; cursor: pointer; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 5px;
 }
+.btn-icon { display: inline-flex; align-items: center; }
+.btn-icon.fit { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; }
 .btn:hover { background: #232c3d; }
 .btn.active { background: #4f9dff; border-color: #4f9dff; color: #07101f; }
 .btn.play { font-size: 14px; min-width: 40px; }
@@ -207,4 +210,16 @@
   .btn.play { min-width: 44px; }
   .maximize-btn, .gbtn { width: 30px; height: 30px; opacity: 0.85; }
   .stage.fs .transport { flex-wrap: nowrap; overflow-x: auto; }
+
+  /* Icon-only transport: drop button text labels, total time, and loop range. */
+  .transport .btn-label,
+  .transport .t-tot,
+  .transport .loop-range { display: none; }
+
+  /* Fullscreen graphs-in-main: beat-grid fills the width below the graphs
+     instead of floating over the third graph. */
+  .player.swapped .stage.fs .overlay-graphs { padding: 2vh 2vw 34vh; }
+  .overlay-controls.wide { flex-wrap: wrap; left: 8px; right: 8px; bottom: 46px; }
+  .overlay-controls.wide .bp-measure { flex: 1 1 100%; max-width: none; }
+  .overlay-controls.wide .beatgrid { max-height: 26vh; overflow: auto; }
 }
