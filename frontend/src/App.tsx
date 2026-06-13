@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Player, type StemConfig } from './components/Player';
 import { Upload } from './components/Upload';
-import { getEnvelopes, getManifest, trackFileUrl } from './api';
+import { deleteTrack, getEnvelopes, getManifest, trackFileUrl } from './api';
 import './App.css';
 
 // Display metadata per stem id (the backend only knows ids + urls).
@@ -52,6 +52,9 @@ export default function App() {
   }, [trackId]);
 
   const reset = () => {
+    if (trackId) deleteTrack(trackId); // free the server data when moving on
+    // Drop ?track= so a refresh doesn't try to reload the deleted track.
+    window.history.replaceState({}, '', window.location.pathname);
     setTrackId(null);
     setTrack(null);
     setError(null);

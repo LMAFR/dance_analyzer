@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -34,6 +35,8 @@ DATA_DIR = Path(
 MAX_BYTES = int(os.environ.get("DANCERSDECK_MAX_MB", "200")) * 1024 * 1024
 MAX_DURATION = float(os.environ.get("DANCERSDECK_MAX_SECS", "600"))  # 10 min
 MAX_TRACKS = int(os.environ.get("DANCERSDECK_MAX_TRACKS", "40"))
+# Tracks are ephemeral — auto-deleted this many seconds after creation (default 3h).
+TRACK_TTL = int(os.environ.get("DANCERSDECK_TRACK_TTL_SECS", "10800"))
 ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
 ALLOWED_SUFFIXES = {".mp4", ".mov", ".webm", ".mkv", ".m4v", ".avi"}
 
@@ -45,7 +48,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-jobs = JobManager(DATA_DIR, max_tracks=MAX_TRACKS)
+jobs = JobManager(DATA_DIR, max_tracks=MAX_TRACKS, ttl_secs=TRACK_TTL)
 
 
 def _probe_duration(path: str) -> float | None:
@@ -151,6 +154,16 @@ def export(track_id: str, req: ExportRequest) -> FileResponse:
         filename=f"{track_id}_clip.mp4",
         background=BackgroundTask(lambda: Path(out.name).unlink(missing_ok=True)),
     )
+
+
+@app.delete("/api/tracks/{track_id}")
+def delete_track(track_id: str) -> dict:
+    """Explicitly drop a track's data (called when the user moves on)."""
+    d = (DATA_DIR / track_id).resolve()
+    if d.parent != DATA_DIR.resolve() or not d.is_dir():
+        raise HTTPException(404, "Track not found")
+    shutil.rmtree(d, ignore_errors=True)
+    return {"deleted": track_id}
 
 
 @app.get("/api/health")

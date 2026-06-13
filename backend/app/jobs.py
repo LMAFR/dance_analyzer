@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import shutil
 import threading
+import time
 import traceback
 import uuid
 from dataclasses import dataclass, asdict
@@ -32,27 +33,45 @@ class Job:
 
 
 class JobManager:
-    def __init__(self, data_dir: Path, max_tracks: int = 40):
+    def __init__(self, data_dir: Path, max_tracks: int = 40, ttl_secs: int = 10800):
         self.data_dir = data_dir
         self.max_tracks = max_tracks
+        self.ttl_secs = ttl_secs  # tracks are ephemeral: auto-deleted after this
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
         self._queue: "Queue[tuple[str, str]]" = Queue()
         self._worker = threading.Thread(target=self._run, daemon=True)
         self._worker.start()
+        self._reaper = threading.Thread(target=self._reap_loop, daemon=True)
+        self._reaper.start()
 
-    def _prune_tracks(self) -> None:
-        """Keep only the most recent `max_tracks` processed tracks (by mtime)."""
-        if self.max_tracks <= 0:
-            return
-        tracks = [
+    def _track_dirs(self) -> list[Path]:
+        return [
             d for d in self.data_dir.iterdir()
             if d.is_dir() and (d / "manifest.json").exists()
         ]
-        tracks.sort(key=lambda d: d.stat().st_mtime, reverse=True)
+
+    def _prune_tracks(self) -> None:
+        """Keep only the most recent `max_tracks` processed tracks (backstop)."""
+        if self.max_tracks <= 0:
+            return
+        tracks = sorted(self._track_dirs(), key=lambda d: d.stat().st_mtime, reverse=True)
         for old in tracks[self.max_tracks:]:
             shutil.rmtree(old, ignore_errors=True)
+
+    def _reap_loop(self) -> None:
+        """Delete tracks older than the TTL so storage stays ephemeral."""
+        while True:
+            try:
+                if self.ttl_secs > 0:
+                    cutoff = time.time() - self.ttl_secs
+                    for d in self._track_dirs():
+                        if d.stat().st_mtime < cutoff:
+                            shutil.rmtree(d, ignore_errors=True)
+            except Exception:  # noqa: BLE001
+                traceback.print_exc()
+            time.sleep(1800)  # every 30 min
 
     def submit(self, video_path: str) -> str:
         job_id = uuid.uuid4().hex[:12]

@@ -55,6 +55,11 @@ export async function getEnvelopes(
 export const trackFileUrl = (trackId: string, filename: string) =>
   `/api/tracks/${trackId}/${filename}`;
 
+/** Explicitly delete a track's data on the server (fire-and-forget). */
+export async function deleteTrack(trackId: string): Promise<void> {
+  await fetch(`/api/tracks/${trackId}`, { method: 'DELETE' }).catch(() => {});
+}
+
 /** Render a cropped clip (time range + chosen stems) and return it as a Blob. */
 export async function exportClip(
   trackId: string,
