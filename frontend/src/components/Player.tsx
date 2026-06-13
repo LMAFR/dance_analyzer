@@ -73,8 +73,7 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<AudioEngine | null>(null);
 
-  const [ready, setReady] = useState(false);
-  const [videoReady, setVideoReady] = useState(false);
+  const [ready, setReady] = useState(false); // stems decoded & ready to play
   const [buffering, setBuffering] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -111,7 +110,6 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
     const video = videoRef.current;
     if (!video) return;
     setReady(false);
-    setVideoReady(false);
     setLoadError(null);
     let disposed = false;
     const engine = new AudioEngine(video);
@@ -392,7 +390,6 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   }, [view, playing, time, duration]);
 
   const isActive = (id: string) => !muted[id];
-  const loading = !ready || !videoReady;
 
   // On phones we keep it simple: all three graphs live in the main area (no
   // featured/rail split), and the video floats as a PiP over them.
@@ -533,7 +530,7 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
         <button
           className={menuOpen ? 'btn active' : 'btn'}
           onClick={() => setMenuOpen((o) => !o)}
-          disabled={loading}
+          disabled={!ready}
           title="More: export & playback speed"
         >
           <span className="btn-icon"><KebabIcon /></span>
@@ -591,19 +588,13 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
             onLoadedMetadata={(e) => {
               const v = e.currentTarget;
               if (v.videoWidth && v.videoHeight) setVideoAspect(v.videoWidth / v.videoHeight);
-              // metadata is the earliest reliable signal (iOS may not fire
-              // 'canplay' for a muted, non-autoplay video until it's played),
-              // so treat the video as ready here to avoid a play-disabled deadlock.
-              setVideoReady(true);
             }}
-            onLoadedData={() => setVideoReady(true)}
-            onCanPlay={() => setVideoReady(true)}
             onError={() => {
               const err = videoRef.current?.error;
               setLoadError(`Video failed to load${err ? ` (code ${err.code})` : ''}`);
             }}
           />
-          {(buffering || (loading && pipActive && !loadError)) && (
+          {(buffering || (!ready && pipActive && !loadError)) && (
             <div className="buffering-overlay"><div className="spinner" /></div>
           )}
           {swapped && (
@@ -619,10 +610,10 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
           <div className="spinner-overlay error">
             <span>⚠ {loadError}</span>
           </div>
-        ) : loading && !pipActive && (
+        ) : !ready && !pipActive && (
           <div className="spinner-overlay">
             <div className="spinner" />
-            <span>{!ready ? 'Loading stems…' : 'Loading video…'}</span>
+            <span>Loading stems…</span>
           </div>
         )}
 
