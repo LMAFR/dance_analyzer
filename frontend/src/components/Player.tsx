@@ -512,7 +512,7 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
 
   const transport = (
     <div className="transport">
-      <button className="btn play" onClick={togglePlay} disabled={loading}>{playing ? '❚❚' : '▶'}</button>
+      <button className="btn play" onClick={togglePlay} disabled={!ready || !!loadError}>{playing ? '❚❚' : '▶'}</button>
       <span className="time">
         <span className="t-cur">{fmtTime(time)}</span>
         <span className="t-tot"> / {fmtTime(duration)}</span>
@@ -591,6 +591,10 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
             onLoadedMetadata={(e) => {
               const v = e.currentTarget;
               if (v.videoWidth && v.videoHeight) setVideoAspect(v.videoWidth / v.videoHeight);
+              // metadata is the earliest reliable signal (iOS may not fire
+              // 'canplay' for a muted, non-autoplay video until it's played),
+              // so treat the video as ready here to avoid a play-disabled deadlock.
+              setVideoReady(true);
             }}
             onLoadedData={() => setVideoReady(true)}
             onCanPlay={() => setVideoReady(true)}
@@ -599,7 +603,7 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
               setLoadError(`Video failed to load${err ? ` (code ${err.code})` : ''}`);
             }}
           />
-          {buffering && (
+          {(buffering || (loading && pipActive && !loadError)) && (
             <div className="buffering-overlay"><div className="spinner" /></div>
           )}
           {swapped && (
@@ -615,7 +619,7 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
           <div className="spinner-overlay error">
             <span>⚠ {loadError}</span>
           </div>
-        ) : loading && (
+        ) : loading && !pipActive && (
           <div className="spinner-overlay">
             <div className="spinner" />
             <span>{!ready ? 'Loading stems…' : 'Loading video…'}</span>
