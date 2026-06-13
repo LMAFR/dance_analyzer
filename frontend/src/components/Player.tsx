@@ -207,13 +207,42 @@ export function Player({ videoUrl, stems }: PlayerProps) {
     setLoopRegion(null);
   }, []);
 
-  // PiP drag / resize.
+  // PiP drag / resize. Pointer capture is tracked and released defensively:
+  // Firefox can drop the implicit pointerup release when the captured subtree
+  // re-renders mid-drag (setPip fires every move), and a stuck capture swallows
+  // every later click — freezing the whole UI. endGesture() always releases.
   const dragRef = useRef<{ dx: number; dy: number } | null>(null);
   const resizeRef = useRef<{ sx: number; sw: number } | null>(null);
+  const capturedRef = useRef<{ el: HTMLElement; id: number } | null>(null);
+
+  const capture = useCallback((el: HTMLElement, id: number) => {
+    try { el.setPointerCapture(id); capturedRef.current = { el, id }; } catch { /* unsupported / invalid state */ }
+  }, []);
+  const endGesture = useCallback(() => {
+    dragRef.current = null;
+    resizeRef.current = null;
+    const c = capturedRef.current;
+    if (c) {
+      try { c.el.releasePointerCapture(c.id); } catch { /* already released */ }
+      capturedRef.current = null;
+    }
+  }, []);
+
+  // Global safety net: any pointerup/cancel anywhere ends the gesture, even if
+  // the holder's own handler was unmounted mid-drag (e.g. swapped flipped off).
+  useEffect(() => {
+    window.addEventListener('pointerup', endGesture);
+    window.addEventListener('pointercancel', endGesture);
+    return () => {
+      window.removeEventListener('pointerup', endGesture);
+      window.removeEventListener('pointercancel', endGesture);
+    };
+  }, [endGesture]);
+
   const onPipPointerDown = (e: React.PointerEvent) => {
     if (!pip || resizeRef.current) return;
     dragRef.current = { dx: e.clientX - pip.x, dy: e.clientY - pip.y };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    capture(e.currentTarget as HTMLElement, e.pointerId); // stable holder, not e.target
   };
   const onPipPointerMove = (e: React.PointerEvent) => {
     if (!pip) return;
@@ -224,12 +253,12 @@ export function Player({ videoUrl, stems }: PlayerProps) {
       setPip({ ...pip, x: e.clientX - dragRef.current.dx, y: e.clientY - dragRef.current.dy });
     }
   };
-  const onPipPointerUp = () => { dragRef.current = null; resizeRef.current = null; };
+  const onPipPointerUp = endGesture;
   const onResizeDown = (e: React.PointerEvent) => {
     if (!pip) return;
     e.stopPropagation();
     resizeRef.current = { sx: e.clientX, sw: pip.w };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    capture(e.currentTarget as HTMLElement, e.pointerId);
   };
 
   const markers = useMemo(() => computeStepMarkers(beatCfg, duration), [beatCfg, duration]);
