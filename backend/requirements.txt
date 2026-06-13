@@ -1,0 +1,13 @@
+# 1) Install the PyTorch stack from the CPU wheel index FIRST (matched +cpu builds):
+#      pip install torch torchaudio torchcodec --index-url https://download.pytorch.org/whl/cpu
+# 2) Then the rest:
+#      pip install -r requirements.txt
+#
+# torchcodec also needs FFmpeg shared libraries available on the system
+# (install ffmpeg via your OS package manager).
+demucs
+fastapi
+uvicorn[standard]
+python-multipart
+numpy
+soundfile

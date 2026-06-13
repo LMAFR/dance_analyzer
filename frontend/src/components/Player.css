@@ -1,0 +1,211 @@
+.player {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-areas:
+    "main side1"
+    "main side2"
+    "trans trans";
+  align-items: start;
+}
+.area-video { grid-area: main; }
+.area-graphs { grid-area: side1; }
+.area-side { grid-area: side2; }
+.area-trans { grid-area: trans; }
+.area-rail { display: none; }
+
+/* Swapped: graphs take the main area; video + un-featured graphs go to the rail;
+   the options panel becomes a horizontal bar above the transport (saves height). */
+.player.swapped {
+  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-areas:
+    "main vid"
+    "main rail"
+    "opts opts"
+    "trans trans";
+}
+.player.swapped .area-graphs { grid-area: main; }
+.player.swapped .area-video { grid-area: vid; }
+.player.swapped .area-rail { grid-area: rail; display: block; }
+.player.swapped .area-side { grid-area: opts; }
+/* Swapped options bar: mute/solo keeps its natural size; only the beat-grid
+   panel grows to fill the width (and lays its controls out horizontally so it
+   stays short — about the height of the mute/solo block). */
+.player.swapped .side { flex-direction: row; flex-wrap: nowrap; align-items: stretch; gap: 14px; }
+.player.swapped .side .stems { flex: 0 0 auto; }
+.player.swapped .side .beatgrid { flex: 1 1 auto; }
+
+/* Stage / video */
+.stage { position: relative; background: #000; border-radius: 12px; overflow: hidden; margin-inline: auto; }
+.area-video.stage:not(.fs) { height: 70vh; width: auto; max-width: 100%; }
+/* Swapped: height is computed in JS (fills the column down to the bottom graphs). */
+.player.swapped .area-video.stage:not(.fs) { width: auto; max-width: 100%; }
+.stage.fs { width: 100vw; height: 100vh; border-radius: 0; margin: 0; background: #000; }
+
+.video-holder { position: absolute; inset: 0; }
+.video { width: 100%; height: 100%; object-fit: contain; display: block; background: transparent; }
+
+/* PiP: draggable + resizable, semi-transparent, grab cursor. */
+.video-holder.pip {
+  position: absolute; inset: auto; height: auto;
+  border-radius: 10px; overflow: hidden;
+  cursor: grab; z-index: 3; opacity: 0.62;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
+  transition: opacity 0.2s ease; touch-action: none;
+}
+.video-holder.pip:hover { opacity: 0.9; }
+.video-holder.pip:active { cursor: grabbing; }
+.video-holder.pip .video { height: auto; }
+.pip-resize {
+  position: absolute; right: 0; bottom: 0; width: 20px; height: 20px;
+  cursor: nwse-resize; touch-action: none;
+  background: linear-gradient(135deg, transparent 45%, rgba(255, 255, 255, 0.7) 45%, rgba(255, 255, 255, 0.7) 55%, transparent 55%);
+}
+
+/* Spinner */
+.spinner-overlay {
+  position: absolute; inset: 0; z-index: 6;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; color: #9aa4b6; font-size: 13px; background: #0b0e14;
+}
+.spinner { width: 38px; height: 38px; border: 3px solid #2c3647; border-top-color: #4f9dff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Graphs */
+.graph-wrap { position: relative; display: flex; flex-direction: column; gap: 10px; }
+.ig-wrap { position: relative; width: 100%; }
+.ig-spinner {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: #11141c; border-radius: 8px;
+}
+.ig-spinner .spinner { width: 22px; height: 22px; }
+.maximize-btn {
+  position: absolute; top: 6px; right: 6px;
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+  background: rgba(17, 20, 28, 0.72); color: #cfd6e4;
+  border: 1px solid #2c3647; border-radius: 6px; cursor: pointer;
+  opacity: 0.4; transition: opacity 0.15s, background 0.15s; z-index: 2;
+}
+.graph-wrap:hover .maximize-btn { opacity: 1; }
+.maximize-btn:hover { background: #232c3d; color: #fff; }
+.maximize-btn.active { opacity: 1; background: #4f9dff; border-color: #4f9dff; color: #07101f; }
+.video-max { position: absolute; top: 8px; left: 8px; right: auto; opacity: 0.85; z-index: 4; }
+
+/* On-graph controls: mute + maximize. */
+.graph-controls { position: absolute; top: 6px; right: 6px; display: flex; gap: 5px; z-index: 2; }
+.gbtn {
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+  background: rgba(17, 20, 28, 0.72); color: #cfd6e4;
+  border: 1px solid #2c3647; border-radius: 6px; cursor: pointer;
+  opacity: 0.4; transition: opacity 0.15s, background 0.15s;
+}
+.graph-wrap:hover .gbtn { opacity: 1; }
+.gbtn:hover { background: #232c3d; color: #fff; }
+.gbtn.active { opacity: 1; background: #4f9dff; border-color: #4f9dff; color: #07101f; }
+.gbtn.muted { opacity: 1; background: #3a2330; border-color: #ff6b6b; color: #ff9b9b; }
+
+.graphs { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.player.swapped .graphs { gap: 12px; }
+.rail-graphs { display: flex; flex-direction: column; gap: 8px; }
+
+/* Side controls */
+.side { display: flex; flex-direction: column; gap: 14px; }
+.stems { display: flex; flex-direction: column; gap: 8px; }
+.stem-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #cfd6e4; }
+.stem-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+.stem-name { flex: 1; }
+.tip { font-size: 12px; color: #6b7488; margin: 0; }
+
+/* Transport */
+.transport {
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  background: #11141c; border: 1px solid #1c2330; border-radius: 10px;
+}
+.stage.fs .transport {
+  position: absolute; left: 0; right: 0; bottom: 0; border: none; border-radius: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0)); z-index: 5;
+}
+.transport .time { font-variant-numeric: tabular-nums; color: #fff; font-size: 13px; min-width: 132px; }
+.scrub { flex: 1; accent-color: #4f9dff; }
+
+/* Buttons */
+.btn {
+  background: #1b2230; color: #cfd6e4; border: 1px solid #2c3647; border-radius: 6px;
+  padding: 4px 10px; font-size: 12px; cursor: pointer; white-space: nowrap;
+}
+.btn:hover { background: #232c3d; }
+.btn.active { background: #4f9dff; border-color: #4f9dff; color: #07101f; }
+.btn.solo.active { background: #ffce4f; border-color: #ffce4f; color: #07101f; }
+.btn.play { font-size: 14px; min-width: 40px; }
+.btn.loop-active { background: #243449; border-color: #4f9dff; color: #cfe2ff; }
+.btn.tiny { padding: 3px 7px; font-size: 11px; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+
+/* Panels */
+.panel { background: #11141c; border: 1px solid #1c2330; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.panel-head .head-right { display: flex; align-items: center; gap: 8px; }
+
+/* Beat-grid panel: groups flow horizontally and wrap, so a wider panel is shorter. */
+.panel.beatgrid { flex-direction: row; flex-wrap: wrap; align-items: flex-start; gap: 8px 18px; }
+.bg-group { display: flex; flex-direction: column; gap: 5px; }
+.bg-group.enable { gap: 4px; }
+.beatgrid .fld { min-width: 140px; }
+.beatgrid .pick-row { display: flex; align-items: center; gap: 6px; }
+.beatgrid .legend { flex-direction: column; gap: 4px; align-items: flex-start; padding-top: 0; }
+.beatgrid .hint { margin: 0; }
+.panel .chk { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #e7ecf5; }
+.panel .status { font-size: 11px; color: #7c869a; }
+.panel .status.ok { color: #2ee6a6; }
+.panel .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.panel .val { font-size: 12px; color: #9aa4b6; font-variant-numeric: tabular-nums; }
+.panel .fld { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: #7c869a; }
+.panel .fld select { background: #0b0e14; border: 1px solid #2c3647; border-radius: 5px; color: #e7ecf5; padding: 5px 6px; font-size: 12px; }
+.panel .hint { margin: 0; font-size: 11px; color: #ffce4f; }
+.legend { display: flex; gap: 12px; flex-wrap: wrap; padding-top: 2px; }
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #9aa4b6; }
+.legend-dot { width: 9px; height: 9px; border-radius: 50%; }
+
+/* Fullscreen overlays */
+.overlay-graphs { position: absolute; top: 16px; right: 16px; width: min(34vw, 460px); display: flex; flex-direction: column; gap: 8px; z-index: 2; max-height: calc(100vh - 32px); overflow: auto; }
+.overlay-left { position: absolute; top: 16px; left: 16px; width: 250px; display: flex; flex-direction: column; gap: 10px; max-height: calc(100vh - 120px); overflow: auto; z-index: 4; }
+.overlay-left .overlay-stems { position: static; }
+.overlay-rail { display: flex; flex-direction: column; gap: 6px; }
+.overlay-stems { position: absolute; top: 16px; left: 16px; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: rgba(0, 0, 0, 0.4); border-radius: 10px; backdrop-filter: blur(4px); z-index: 4; }
+.overlay-controls { position: absolute; bottom: 58px; left: 16px; display: flex; flex-direction: row; gap: 12px; flex-wrap: wrap; align-items: flex-end; max-width: 70vw; z-index: 4; }
+.overlay-controls .panel { background: rgba(10, 13, 20, 0.82); backdrop-filter: blur(6px); }
+
+/* Graphs-in-main fullscreen: beat-grid keeps its natural height; mute/solo and
+   the minimized graphs are sized (in JS) to match it. Minimized graphs fill the
+   leftover width (50/50). */
+.overlay-controls.wide {
+  left: 16px; right: 16px; max-width: none;
+  flex-wrap: nowrap; align-items: flex-start;
+}
+.overlay-controls.wide .bp-measure { flex: 0 0 auto; max-width: 60vw; }
+.overlay-controls.wide .beatgrid { flex: 0 0 auto; }
+.overlay-controls.wide .mini-stems { flex: 0 0 auto; justify-content: center; overflow: hidden; padding: 8px 10px; }
+/* Compact the mute/solo rows so they fit with breathing room above the first
+   and below the last row. */
+.overlay-controls.wide .mini-stems .stems { gap: 3px; }
+.overlay-controls.wide .mini-stems .stem-row { gap: 5px; font-size: 10px; }
+.overlay-controls.wide .mini-stems .stem-dot { width: 7px; height: 7px; }
+.overlay-controls.wide .mini-stems .btn { padding: 1px 5px; font-size: 9px; }
+.overlay-controls.wide .overlay-rail {
+  flex: 1 1 auto; display: flex; flex-direction: row; gap: 10px; min-width: 0;
+}
+.overlay-controls.wide .overlay-rail .graph-wrap { flex: 1 1 0; min-width: 0; }
+
+/* Fullscreen + swapped: graphs fill the screen. */
+.player.swapped .stage.fs .overlay-graphs { top: 0; left: 0; right: 0; bottom: 0; width: auto; padding: 3vh 3vw 12vh; gap: 12px; }
+
+@media (max-width: 880px) {
+  .player { grid-template-columns: 1fr; grid-template-areas: "main" "side1" "rail" "side2" "trans"; }
+  .player.swapped { grid-template-areas: "main" "vid" "rail" "opts" "trans"; }
+  .area-video.stage:not(.fs) { height: auto; width: 100%; }
+}

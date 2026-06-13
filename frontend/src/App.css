@@ -1,0 +1,47 @@
+.app {
+  min-height: 100vh;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.topbar {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  max-width: 1280px;
+  margin: 0 auto 18px;
+}
+
+.topbar h1 {
+  font-size: 20px;
+  margin: 0;
+  letter-spacing: 0.5px;
+}
+
+.tag {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #7c869a;
+  border: 1px solid #2c3647;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.link {
+  background: none;
+  border: none;
+  color: #4f9dff;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.status {
+  text-align: center;
+  color: #9aa4b6;
+  margin-top: 40px;
+}
+.status.error {
+  color: #ff6b6b;
+}
