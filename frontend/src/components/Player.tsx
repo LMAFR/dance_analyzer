@@ -100,9 +100,11 @@ export function Player({ videoUrl, stems }: PlayerProps) {
         setLoadError(e instanceof Error ? e.message : String(e));
       });
     engine.onTick = (t) => setTime(t);
+    engine.onEnded = () => setPlaying(false); // reset transport to ▶ at end
     return () => {
       disposed = true;
       engine.onTick = null;
+      engine.onEnded = null;
       engine.dispose();
       engineRef.current = null;
     };

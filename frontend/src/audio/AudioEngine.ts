@@ -65,6 +65,9 @@ export class AudioEngine {
   /** Optional callback fired each rAF with the current media time. */
   onTick: ((time: number) => void) | null = null;
 
+  /** Fired once when playback runs off the end of the media (auto-stop). */
+  onEnded: (() => void) | null = null;
+
   constructor(video: HTMLVideoElement, opts: AudioEngineOptions = {}) {
     this.video = video;
     this.opts = { ...DEFAULTS, ...opts };
@@ -244,6 +247,7 @@ export class AudioEngine {
     if (audioTime >= this.duration) {
       this.pause();
       this.seek(0);
+      this.onEnded?.();
       return;
     }
 
