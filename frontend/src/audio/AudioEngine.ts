@@ -48,6 +48,9 @@ export class AudioEngine {
   private soloed = new Set<StemId>();
 
   private playing = false;
+  /** Set once dispose() runs so an in-flight load() bails instead of building
+      nodes on a closed AudioContext (React StrictMode double-mounts the effect). */
+  private disposed = false;
   /** audioContext.currentTime captured when playback (re)started. */
   private startCtxTime = 0;
   /** media offset (s) playback (re)started from. */
@@ -62,6 +65,9 @@ export class AudioEngine {
   /** Optional callback fired each rAF with the current media time. */
   onTick: ((time: number) => void) | null = null;
 
+  /** Fired once when playback runs off the end of the media (auto-stop). */
+  onEnded: (() => void) | null = null;
+
   constructor(video: HTMLVideoElement, opts: AudioEngineOptions = {}) {
     this.video = video;
     this.opts = { ...DEFAULTS, ...opts };
@@ -75,11 +81,16 @@ export class AudioEngine {
     const decoded = await Promise.all(
       sources.map(async (s) => {
         const res = await fetch(s.url);
+        if (!res.ok) throw new Error(`fetch ${s.id} failed: HTTP ${res.status}`);
         const arr = await res.arrayBuffer();
-        const buffer = await this.ctx.decodeAudioData(arr);
+        const buffer = await this.ctx.decodeAudioData(arr).catch((e) => {
+          throw new Error(`decode ${s.id} failed: ${e?.message ?? e}`);
+        });
         return { id: s.id, buffer };
       })
     );
+    // Disposed mid-load (StrictMode remount / unmount): don't touch the closed ctx.
+    if (this.disposed) return;
     this.duration = Math.min(...decoded.map((d) => d.buffer.duration));
     for (const d of decoded) {
       const gain = this.ctx.createGain();
@@ -236,6 +247,7 @@ export class AudioEngine {
     if (audioTime >= this.duration) {
       this.pause();
       this.seek(0);
+      this.onEnded?.();
       return;
     }
 
@@ -277,6 +289,7 @@ export class AudioEngine {
   }
 
   dispose() {
+    this.disposed = true;
     if (this.rafId !== null) cancelAnimationFrame(this.rafId);
     this.stopSources();
     this.ctx.close();

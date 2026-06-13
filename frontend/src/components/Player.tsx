@@ -56,6 +56,7 @@ export function Player({ videoUrl, stems }: PlayerProps) {
 
   const [ready, setReady] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -78,22 +79,32 @@ export function Player({ videoUrl, stems }: PlayerProps) {
     if (!video) return;
     setReady(false);
     setVideoReady(false);
+    setLoadError(null);
+    let disposed = false;
     const engine = new AudioEngine(video);
     engineRef.current = engine;
     const sources: StemSource[] = stems.map((s) => ({ id: s.id, url: s.url }));
     engine
       .load(sources)
       .then(() => {
+        if (disposed) return; // engine was torn down during load
         setDuration(engine.duration);
         const env: Record<string, number[]> = {};
         for (const s of stems) env[s.id] = s.envelope ?? engine.envelope(s.id, ENVELOPE_POINTS);
         setEnvelopes(env);
         setReady(true);
       })
-      .catch((e) => console.error('engine load failed', e));
+      .catch((e) => {
+        if (disposed) return;
+        console.error('engine load failed', e);
+        setLoadError(e instanceof Error ? e.message : String(e));
+      });
     engine.onTick = (t) => setTime(t);
+    engine.onEnded = () => setPlaying(false); // reset transport to ▶ at end
     return () => {
+      disposed = true;
       engine.onTick = null;
+      engine.onEnded = null;
       engine.dispose();
       engineRef.current = null;
     };
@@ -198,13 +209,42 @@ export function Player({ videoUrl, stems }: PlayerProps) {
     setLoopRegion(null);
   }, []);
 
-  // PiP drag / resize.
+  // PiP drag / resize. Pointer capture is tracked and released defensively:
+  // Firefox can drop the implicit pointerup release when the captured subtree
+  // re-renders mid-drag (setPip fires every move), and a stuck capture swallows
+  // every later click — freezing the whole UI. endGesture() always releases.
   const dragRef = useRef<{ dx: number; dy: number } | null>(null);
   const resizeRef = useRef<{ sx: number; sw: number } | null>(null);
+  const capturedRef = useRef<{ el: HTMLElement; id: number } | null>(null);
+
+  const capture = useCallback((el: HTMLElement, id: number) => {
+    try { el.setPointerCapture(id); capturedRef.current = { el, id }; } catch { /* unsupported / invalid state */ }
+  }, []);
+  const endGesture = useCallback(() => {
+    dragRef.current = null;
+    resizeRef.current = null;
+    const c = capturedRef.current;
+    if (c) {
+      try { c.el.releasePointerCapture(c.id); } catch { /* already released */ }
+      capturedRef.current = null;
+    }
+  }, []);
+
+  // Global safety net: any pointerup/cancel anywhere ends the gesture, even if
+  // the holder's own handler was unmounted mid-drag (e.g. swapped flipped off).
+  useEffect(() => {
+    window.addEventListener('pointerup', endGesture);
+    window.addEventListener('pointercancel', endGesture);
+    return () => {
+      window.removeEventListener('pointerup', endGesture);
+      window.removeEventListener('pointercancel', endGesture);
+    };
+  }, [endGesture]);
+
   const onPipPointerDown = (e: React.PointerEvent) => {
     if (!pip || resizeRef.current) return;
     dragRef.current = { dx: e.clientX - pip.x, dy: e.clientY - pip.y };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    capture(e.currentTarget as HTMLElement, e.pointerId); // stable holder, not e.target
   };
   const onPipPointerMove = (e: React.PointerEvent) => {
     if (!pip) return;
@@ -215,12 +255,12 @@ export function Player({ videoUrl, stems }: PlayerProps) {
       setPip({ ...pip, x: e.clientX - dragRef.current.dx, y: e.clientY - dragRef.current.dy });
     }
   };
-  const onPipPointerUp = () => { dragRef.current = null; resizeRef.current = null; };
+  const onPipPointerUp = endGesture;
   const onResizeDown = (e: React.PointerEvent) => {
     if (!pip) return;
     e.stopPropagation();
     resizeRef.current = { sx: e.clientX, sw: pip.w };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    capture(e.currentTarget as HTMLElement, e.pointerId);
   };
 
   const markers = useMemo(() => computeStepMarkers(beatCfg, duration), [beatCfg, duration]);
@@ -368,6 +408,10 @@ export function Player({ videoUrl, stems }: PlayerProps) {
             }}
             onLoadedData={() => setVideoReady(true)}
             onCanPlay={() => setVideoReady(true)}
+            onError={() => {
+              const err = videoRef.current?.error;
+              setLoadError(`Video failed to load${err ? ` (code ${err.code})` : ''}`);
+            }}
           />
           {swapped && (
             <button className="maximize-btn video-max" onPointerDown={(e) => e.stopPropagation()}
@@ -378,7 +422,11 @@ export function Player({ videoUrl, stems }: PlayerProps) {
           {pipActive && <div className="pip-resize" onPointerDown={onResizeDown} title="Drag to resize" />}
         </div>
 
-        {loading && (
+        {loadError ? (
+          <div className="spinner-overlay error">
+            <span>⚠ {loadError}</span>
+          </div>
+        ) : loading && (
           <div className="spinner-overlay">
             <div className="spinner" />
             <span>{!ready ? 'Loading stems…' : 'Loading video…'}</span>

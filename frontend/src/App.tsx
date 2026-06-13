@@ -17,7 +17,9 @@ interface LoadedTrack {
 }
 
 export default function App() {
-  const [trackId, setTrackId] = useState<string | null>(null);
+  const [trackId, setTrackId] = useState<string | null>(
+    () => new URLSearchParams(window.location.search).get('track')
+  );
   const [track, setTrack] = useState<LoadedTrack | null>(null);
   const [error, setError] = useState<string | null>(null);
 
