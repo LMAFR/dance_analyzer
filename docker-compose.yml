@@ -1,0 +1,40 @@
+version: "3.8"
+
+# DancersDeck deployment.
+#   - backend: FastAPI + Demucs worker (CPU), data persisted in a named volume.
+#   - web: Caddy serving the built frontend and proxying /api -> backend.
+#
+# Defaults serve plain HTTP on ${HTTP_PORT:-8090} (put it behind your existing
+# reverse proxy). For standalone HTTPS, set SITE_ADDRESS=your.domain in .env and
+# also publish 443 (see the commented line below).
+
+services:
+  backend:
+    build: ./backend
+    environment:
+      DANCERSDECK_DATA_DIR: /data
+      DANCERSDECK_MAX_MB: ${MAX_MB:-200}
+      DANCERSDECK_MAX_SECS: ${MAX_SECS:-600}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-*}
+    volumes:
+      - dd_data:/data
+    restart: unless-stopped
+
+  web:
+    build: ./frontend
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    ports:
+      - "${HTTP_PORT:-8090}:80"
+      # - "443:443"   # uncomment for standalone HTTPS (SITE_ADDRESS=your.domain)
+    depends_on:
+      - backend
+    restart: unless-stopped
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  dd_data:
+  caddy_data:
+  caddy_config:

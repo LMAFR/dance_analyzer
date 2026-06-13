@@ -1,0 +1,18 @@
+# SITE_ADDRESS controls the listener:
+#   :80            -> plain HTTP (default; use when behind another reverse proxy)
+#   dance.example.com -> Caddy obtains a Let's Encrypt cert automatically (HTTPS)
+{$SITE_ADDRESS::80} {
+	encode gzip
+
+	# API -> FastAPI backend (same compose network).
+	handle /api/* {
+		reverse_proxy backend:8008
+	}
+
+	# Everything else -> the built SPA, with index.html fallback.
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
