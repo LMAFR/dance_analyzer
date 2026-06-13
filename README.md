@@ -99,6 +99,38 @@ Backend env vars (also settable in `.env`): `MAX_MB` (upload size, default 200),
 
 The backend image bakes in the htdemucs weights, so the first separation is fast.
 
+## Performance
+
+Where the wall-clock time goes for an upload (measured on the CPU-only VPS, ~24 s
+1080p clip):
+
+| Phase | Time | Bound by |
+|-------|------|----------|
+| Upload transfer | depends on file size + the user's uplink | network |
+| Video transcode (H.264) | ~6–8 s | CPU (libx264) |
+| Demucs separation | ~30 s (≈1.2× clip length) | **CPU — dominant** |
+| Fold + encode + envelopes | ~5 s | CPU/IO |
+
+Conclusions:
+- **Perceived latency is the thing to fix, and it is**: the video is transcoded
+  first and shown immediately (partial manifest / "video while processing"), so
+  the user waits ~8 s for playback instead of ~45 s for the whole job.
+- **Demucs is the floor** on CPU and dominates. The only large *actual* speed-up
+  is a **GPU** (htdemucs runs ~10× faster on GPU); everything else is marginal.
+- **Parallelising transcode + separation is not worth it here**: both are
+  CPU-bound and the box has no spare cores, so running them together mostly trades
+  contention for little wall-clock gain.
+- **Biggest upload-transfer win (future)**: client-side downscale to ~720p before
+  upload (WebCodecs / ffmpeg.wasm) — cuts transfer *and* transcode time, but it's
+  a sizable feature; deferred.
+
+## TODO / known limitations
+
+- **Pitch shifts with playback speed.** Speed control uses Web Audio
+  `playbackRate` on the stems, so 0.5×/2× also shift the pitch. Pitch-preserved
+  slow-mo would need time-stretching (e.g. an `AudioWorklet`/phase-vocoder or a
+  library like SoundTouch) — deferred.
+
 ## Notes
 
 - Uploads are validated (type, size, duration) and transcoded to

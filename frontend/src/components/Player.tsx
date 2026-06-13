@@ -4,6 +4,7 @@ import { IntensityGraph } from './IntensityGraph';
 import { BeatGridPanel, type PickMode } from './BeatGridPanel';
 import { computeStepMarkers, DEFAULT_BEATGRID, type BeatGridConfig } from '../beatgrid';
 import { fmtTime } from '../format';
+import { exportClip } from '../api';
 import './Player.css';
 
 export interface StemConfig {
@@ -15,6 +16,7 @@ export interface StemConfig {
 }
 
 interface PlayerProps {
+  trackId: string;
   videoUrl: string;
   stems: StemConfig[];
 }
@@ -34,6 +36,23 @@ const MaximizeIcon = () => (
   </svg>
 );
 
+const KebabIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="12" cy="5" r="2" />
+    <circle cx="12" cy="12" r="2" />
+    <circle cx="12" cy="19" r="2" />
+  </svg>
+);
+
+const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2];
+
+const LoopIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4Zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4Z" />
+  </svg>
+);
+
 const MuteIcon = ({ muted }: { muted: boolean }) => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -49,13 +68,14 @@ const MuteIcon = ({ muted }: { muted: boolean }) => (
   </svg>
 );
 
-export function Player({ videoUrl, stems }: PlayerProps) {
+export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<AudioEngine | null>(null);
 
   const [ready, setReady] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
+  const [buffering, setBuffering] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
@@ -69,7 +89,20 @@ export function Player({ videoUrl, stems }: PlayerProps) {
   const [beatCfg, setBeatCfg] = useState<BeatGridConfig>(DEFAULT_BEATGRID);
   const [pickMode, setPickMode] = useState<PickMode>('none');
   const [loopRegion, setLoopRegion] = useState<{ start: number; end: number } | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [rate, setRate] = useState(1);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const bufHideTimer = useRef<number | null>(null);
+  const [view, setView] = useState<{ start: number; end: number } | null>(null); // zoom/pan window
+  // Drag-to-loop is opt-in (off by default on phones, so a drag doesn't make a
+  // loop and single-finger drag stays free; two-finger pinch still zooms).
+  const [loopEnabled, setLoopEnabled] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth > 880 : true
+  );
   const [vh, setVh] = useState(typeof window !== 'undefined' ? window.innerHeight : 800);
+  const [vw, setVw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280);
+  const isMobile = vw <= 880;
   const [pip, setPip] = useState<Pip | null>(null);
   const [beatBarH, setBeatBarH] = useState(0);
   const beatRef = useRef<HTMLDivElement>(null);
@@ -101,10 +134,18 @@ export function Player({ videoUrl, stems }: PlayerProps) {
       });
     engine.onTick = (t) => setTime(t);
     engine.onEnded = () => setPlaying(false); // reset transport to ▶ at end
+    engine.onBuffering = (b) => {
+      // Keep the spinner steady across brief flickers: show immediately, hide
+      // only after it's been clear for a moment.
+      if (bufHideTimer.current) { clearTimeout(bufHideTimer.current); bufHideTimer.current = null; }
+      if (b) setBuffering(true);
+      else bufHideTimer.current = window.setTimeout(() => setBuffering(false), 250);
+    };
     return () => {
       disposed = true;
       engine.onTick = null;
       engine.onEnded = null;
+      engine.onBuffering = null;
       engine.dispose();
       engineRef.current = null;
     };
@@ -112,7 +153,7 @@ export function Player({ videoUrl, stems }: PlayerProps) {
   }, [videoUrl]);
 
   useEffect(() => {
-    const onResize = () => setVh(window.innerHeight);
+    const onResize = () => { setVh(window.innerHeight); setVw(window.innerWidth); };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
@@ -134,13 +175,19 @@ export function Player({ videoUrl, stems }: PlayerProps) {
     return () => ro.disconnect();
   }, [fullscreen, swapped]);
 
-  const pipActive = fullscreen && swapped;
+  // The video floats as a PiP whenever graphs own the main area in fullscreen,
+  // or on phones (where graphs-in-main always uses the floating PiP).
+  const pipActive = swapped && (fullscreen || isMobile);
   useEffect(() => {
     if (pipActive && !pip) {
-      const w = Math.round(window.innerWidth * 0.12); // small PiP
-      // Sit lower and a bit further left so it clears each graph's expand/mute buttons.
+      // Bigger by default on phones (12% is unusably small there).
+      const frac = isMobile ? 0.42 : 0.12;
+      const w = Math.round(window.innerWidth * frac);
+      // Phones: centre it over the graphs (clears both the top-left labels and
+      // top-right buttons). Desktop: tuck it into the top-right.
       const margin = Math.round(window.innerWidth * 0.07);
-      setPip({ x: window.innerWidth - w - margin, y: Math.round(window.innerHeight * 0.12), w });
+      const x = isMobile ? Math.round((window.innerWidth - w) / 2) : window.innerWidth - w - margin;
+      setPip({ x, y: Math.round(window.innerHeight * 0.12), w });
     }
     if (!pipActive && pip) setPip(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -167,6 +214,9 @@ export function Player({ videoUrl, stems }: PlayerProps) {
   }, []);
 
   const maximizeGraph = (id: string) => {
+    // On phones there's no featured/rail split — the button just toggles between
+    // graphs-in-main and video-in-main.
+    if (isMobile) { setSwapped((s) => !s); return; }
     if (!swapped) { setFeatured(new Set([id])); setSwapped(true); return; }
     const next = new Set(featured);
     if (next.has(id)) next.delete(id);
@@ -179,9 +229,15 @@ export function Player({ videoUrl, stems }: PlayerProps) {
   const toggleFullscreen = useCallback(() => {
     const stage = stageRef.current;
     if (!stage) return;
-    if (!document.fullscreenElement) stage.requestFullscreen?.();
-    else document.exitFullscreen?.();
-  }, []);
+    if (!document.fullscreenElement) {
+      // On phones, fullscreen means "video big" — graphs-in-main fullscreen looks
+      // the same as windowed, so force video-in-main first.
+      if (isMobile) setSwapped(false);
+      stage.requestFullscreen?.();
+    } else {
+      document.exitFullscreen?.();
+    }
+  }, [isMobile]);
 
   const onPick = useCallback(
     (t: number) => {
@@ -208,6 +264,45 @@ export function Player({ videoUrl, stems }: PlayerProps) {
     engineRef.current?.clearLoop();
     setLoopRegion(null);
   }, []);
+
+  // Export a clip: crop to the loop region (or whole track) with the currently
+  // audible (un-muted) stems mixed as the audio.
+  const onExport = useCallback(async () => {
+    const start = loopRegion?.start ?? 0;
+    const end = loopRegion?.end ?? duration;
+    const chosen = stems.filter((s) => !muted[s.id]).map((s) => s.id);
+    setExporting(true);
+    try {
+      const blob = await exportClip(trackId, start, end, chosen);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${trackId}_clip.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(`Export failed: ${e instanceof Error ? e.message : e}`);
+    } finally {
+      setExporting(false);
+    }
+  }, [trackId, loopRegion, duration, stems, muted]);
+
+  const changeRate = useCallback((r: number) => {
+    engineRef.current?.setRate(r);
+    setRate(r);
+  }, []);
+
+  // Close the ⋮ menu on an outside click.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [menuOpen]);
 
   // PiP drag / resize. Pointer capture is tracked and released defensively:
   // Firefox can drop the implicit pointerup release when the captured subtree
@@ -263,18 +358,52 @@ export function Player({ videoUrl, stems }: PlayerProps) {
     capture(e.currentTarget as HTMLElement, e.pointerId);
   };
 
+  // Shared zoom/pan window across all graphs (clamped; full window -> null).
+  const onViewChange = useCallback(
+    (start: number, end: number) => {
+      const dur = duration || 0;
+      const MIN = 0.25;
+      let s = Math.max(0, Math.min(start, end));
+      let e = Math.min(dur, Math.max(start, end));
+      if (e - s < MIN) {
+        const c = (s + e) / 2;
+        s = Math.max(0, c - MIN / 2);
+        e = Math.min(dur, s + MIN);
+      }
+      if (e - s >= dur - 0.01) setView(null); // fully zoomed out -> full view
+      else setView({ start: s, end: e });
+    },
+    [duration]
+  );
+
   const markers = useMemo(() => computeStepMarkers(beatCfg, duration), [beatCfg, duration]);
+
+  // While zoomed and playing, scroll the window to keep the playhead centered so
+  // you always see the graph around the current moment. (When paused, the view
+  // is whatever you panned/zoomed to.)
+  const renderView = useMemo(() => {
+    if (!view) return null;
+    if (!playing) return view;
+    const span = view.end - view.start;
+    let s = time - span / 2;
+    if (s < 0) s = 0;
+    if (s + span > duration) s = Math.max(0, duration - span);
+    return { start: s, end: Math.min(duration, s + span) };
+  }, [view, playing, time, duration]);
 
   const isActive = (id: string) => !muted[id];
   const loading = !ready || !videoReady;
 
-  const featuredStems = stems.filter((s) => featured.has(s.id));
-  const railStems = stems.filter((s) => !featured.has(s.id));
+  // On phones we keep it simple: all three graphs live in the main area (no
+  // featured/rail split), and the video floats as a PiP over them.
+  const featuredStems = isMobile ? stems : stems.filter((s) => featured.has(s.id));
+  const railStems = isMobile ? [] : stems.filter((s) => !featured.has(s.id));
 
   const graphProps = (s: StemConfig) => ({
     label: s.label, color: s.color, envelope: envelopes[s.id] ?? [],
     currentTime: time, duration, active: isActive(s.id), onSeek: seek,
-    markers, loopRegion, onSelectRegion, pickMode: pickMode !== 'none', onPick,
+    markers, loopRegion, onSelectRegion: loopEnabled ? onSelectRegion : undefined,
+    pickMode: pickMode !== 'none', onPick, onViewChange,
   });
 
   const graphControls = (id: string, inMain: boolean) => (
@@ -299,7 +428,13 @@ export function Player({ videoUrl, stems }: PlayerProps) {
   const renderGraphs = (list: StemConfig[], overlay: boolean, height: number) =>
     list.map((s) => (
       <div className="graph-wrap" key={s.id}>
-        <IntensityGraph {...graphProps(s)} overlay={overlay} height={height} />
+        <IntensityGraph
+          {...graphProps(s)}
+          overlay={overlay}
+          height={height}
+          tStart={renderView?.start}
+          tEnd={renderView?.end}
+        />
         {graphControls(s.id, swapped && featured.has(s.id))}
       </div>
     ));
@@ -338,8 +473,16 @@ export function Player({ videoUrl, stems }: PlayerProps) {
   // The main graph area. "big" = windowed main, or graphs filling the fullscreen
   // screen (swapped); otherwise it's a small overlay floating on the video.
   const renderMain = (overlay: boolean) => {
+    // Mobile: the three graphs, equal size, no wrapping/featuring.
+    if (isMobile) {
+      const c = featuredStems.length || 1;
+      const h = Math.max(150, Math.floor((vh - (overlay ? 150 : 210)) / c));
+      return renderGraphs(featuredStems, overlay, h);
+    }
     const big = !overlay || swapped;
-    if (featuredStems.length === 1) {
+    // A lone graph wraps to 3 rows only at full view; once zoomed/panned it
+    // becomes a single windowed graph the user can pan/zoom freely.
+    if (featuredStems.length === 1 && !view) {
       const rowH = big
         ? Math.max(80, Math.floor((overlay ? vh - 200 : vh - 280) / WRAP_ROWS))
         : 64;
@@ -352,7 +495,6 @@ export function Player({ videoUrl, stems }: PlayerProps) {
   const beatPanel = (
     <BeatGridPanel
       cfg={beatCfg} onChange={setBeatCfg} pickMode={pickMode} setPickMode={setPickMode}
-      loopRegion={loopRegion} onClearLoop={clearLoop}
     />
   );
 
@@ -371,15 +513,56 @@ export function Player({ videoUrl, stems }: PlayerProps) {
   const transport = (
     <div className="transport">
       <button className="btn play" onClick={togglePlay} disabled={loading}>{playing ? '❚❚' : '▶'}</button>
-      <span className="time">{fmtTime(time)} / {fmtTime(duration)}</span>
+      <span className="time">
+        <span className="t-cur">{fmtTime(time)}</span>
+        <span className="t-tot"> / {fmtTime(duration)}</span>
+      </span>
       <input className="scrub" type="range" min={0} max={duration || 0} step={0.001}
         value={time} onChange={(e) => seek(Number(e.target.value))} />
-      {loopRegion && (
-        <button className="btn loop-active" onClick={clearLoop} title="Stop looping">
-          🔁 {fmtTime(loopRegion.start)}–{fmtTime(loopRegion.end)} ✕
+      <button
+        className={loopEnabled ? 'btn active' : 'btn'}
+        onClick={() => { if (loopEnabled) clearLoop(); setLoopEnabled((v) => !v); }}
+        title={loopEnabled
+          ? 'Looping on — drag a graph to loop a section; tap to turn off (clears the loop)'
+          : 'Looping off — tap to enable drag-to-loop'}
+      >
+        <span className="btn-icon"><LoopIcon /></span>
+        <span className="btn-label">{loopEnabled ? 'Loop on' : 'Loop off'}</span>
+      </button>
+      <div className="menu-wrap" ref={menuRef}>
+        <button
+          className={menuOpen ? 'btn active' : 'btn'}
+          onClick={() => setMenuOpen((o) => !o)}
+          disabled={loading}
+          title="More: export & playback speed"
+        >
+          <span className="btn-icon"><KebabIcon /></span>
         </button>
-      )}
-      <button className="btn" onClick={toggleFullscreen}>{fullscreen ? 'Exit FS' : 'Fullscreen'}</button>
+        {menuOpen && (
+          <div className="menu-pop">
+            <button className="menu-item" onClick={() => { setMenuOpen(false); onExport(); }} disabled={exporting}>
+              ⤓ {exporting ? 'Exporting…' : 'Export clip'}
+            </button>
+            <div className="menu-sep" />
+            <div className="menu-label">Speed</div>
+            <div className="speed-row">
+              {SPEEDS.map((s) => (
+                <button
+                  key={s}
+                  className={rate === s ? 'speed-btn active' : 'speed-btn'}
+                  onClick={() => changeRate(s)}
+                >
+                  {s}×
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      <button className="btn" onClick={toggleFullscreen} title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
+        <span className="btn-icon"><MaximizeIcon /></span>
+        <span className="btn-label">{fullscreen ? 'Exit FS' : 'Fullscreen'}</span>
+      </button>
     </div>
   );
 
@@ -389,19 +572,22 @@ export function Player({ videoUrl, stems }: PlayerProps) {
         className={`area-video stage ${fullscreen ? 'fs' : ''}`}
         ref={stageRef}
         style={{
-          aspectRatio: fullscreen ? undefined : videoAspect,
-          height: !fullscreen && swapped ? swappedVideoH : undefined,
+          aspectRatio: fullscreen || pipActive ? undefined : videoAspect,
+          // The desktop two-column height math doesn't apply once the layout
+          // collapses to one column on phones (CSS handles it there). When the
+          // video floats as a PiP (mobile), the stage cell collapses.
+          height: pipActive && !fullscreen ? 0 : (!fullscreen && swapped && vw > 880 ? swappedVideoH : undefined),
         }}
       >
         <div
           className={`video-holder ${pipActive ? 'pip' : ''}`}
-          style={pipActive && pip ? { left: pip.x, top: pip.y, width: pip.w } : undefined}
+          style={pipActive && pip ? { left: pip.x, top: pip.y, width: pip.w, aspectRatio: videoAspect } : undefined}
           onPointerDown={pipActive ? onPipPointerDown : undefined}
           onPointerMove={pipActive ? onPipPointerMove : undefined}
           onPointerUp={pipActive ? onPipPointerUp : undefined}
         >
           <video
-            ref={videoRef} src={videoUrl} className="video" playsInline
+            ref={videoRef} src={videoUrl} className="video" playsInline preload="auto"
             onLoadedMetadata={(e) => {
               const v = e.currentTarget;
               if (v.videoWidth && v.videoHeight) setVideoAspect(v.videoWidth / v.videoHeight);
@@ -413,6 +599,9 @@ export function Player({ videoUrl, stems }: PlayerProps) {
               setLoadError(`Video failed to load${err ? ` (code ${err.code})` : ''}`);
             }}
           />
+          {buffering && (
+            <div className="buffering-overlay"><div className="spinner" /></div>
+          )}
           {swapped && (
             <button className="maximize-btn video-max" onPointerDown={(e) => e.stopPropagation()}
               onClick={maximizeVideo} title="Show the video in the main view">

@@ -6,7 +6,9 @@ swapped for RQ/Celery + Redis later (Milestone 6) without touching the API layer
 """
 from __future__ import annotations
 
+import shutil
 import threading
+import time
 import traceback
 import uuid
 from dataclasses import dataclass, asdict
@@ -21,9 +23,10 @@ from .separation import process_track
 class Job:
     id: str
     state: str = "queued"  # queued | processing | done | error
-    stage: str = ""        # extracting | separating | mixing | encoding | analysing
+    stage: str = ""        # preparing | extracting | separating | mixing | encoding | analysing
     progress: float = 0.0  # 0..1
     track_id: Optional[str] = None
+    video_ready: bool = False  # video transcoded & viewable (stems may still be processing)
     error: Optional[str] = None
 
     def public(self) -> dict:
@@ -31,14 +34,45 @@ class Job:
 
 
 class JobManager:
-    def __init__(self, data_dir: Path):
+    def __init__(self, data_dir: Path, max_tracks: int = 40, ttl_secs: int = 10800):
         self.data_dir = data_dir
+        self.max_tracks = max_tracks
+        self.ttl_secs = ttl_secs  # tracks are ephemeral: auto-deleted after this
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
         self._queue: "Queue[tuple[str, str]]" = Queue()
         self._worker = threading.Thread(target=self._run, daemon=True)
         self._worker.start()
+        self._reaper = threading.Thread(target=self._reap_loop, daemon=True)
+        self._reaper.start()
+
+    def _track_dirs(self) -> list[Path]:
+        return [
+            d for d in self.data_dir.iterdir()
+            if d.is_dir() and (d / "manifest.json").exists()
+        ]
+
+    def _prune_tracks(self) -> None:
+        """Keep only the most recent `max_tracks` processed tracks (backstop)."""
+        if self.max_tracks <= 0:
+            return
+        tracks = sorted(self._track_dirs(), key=lambda d: d.stat().st_mtime, reverse=True)
+        for old in tracks[self.max_tracks:]:
+            shutil.rmtree(old, ignore_errors=True)
+
+    def _reap_loop(self) -> None:
+        """Delete tracks older than the TTL so storage stays ephemeral."""
+        while True:
+            try:
+                if self.ttl_secs > 0:
+                    cutoff = time.time() - self.ttl_secs
+                    for d in self._track_dirs():
+                        if d.stat().st_mtime < cutoff:
+                            shutil.rmtree(d, ignore_errors=True)
+            except Exception:  # noqa: BLE001
+                traceback.print_exc()
+            time.sleep(1800)  # every 30 min
 
     def submit(self, video_path: str) -> str:
         job_id = uuid.uuid4().hex[:12]
@@ -62,20 +96,27 @@ class JobManager:
             job_id, video_path = self._queue.get()
             track_id = job_id  # one track per job
             try:
-                self._update(job_id, state="processing", stage="extracting")
+                self._update(job_id, state="processing", stage="preparing")
 
                 def progress(stage: str, frac: float) -> None:
                     self._update(job_id, stage=stage, progress=frac)
+
+                def on_video_ready(_dur: float) -> None:
+                    # Video is transcoded & viewable; expose the track id now so
+                    # the frontend can show it while stems keep separating.
+                    self._update(job_id, video_ready=True, track_id=track_id)
 
                 process_track(
                     video_path,
                     str(self.data_dir / track_id),
                     track_id,
                     progress,
+                    on_video_ready=on_video_ready,
                 )
                 self._update(
                     job_id, state="done", stage="", progress=1.0, track_id=track_id
                 )
+                self._prune_tracks()
             except Exception as e:  # noqa: BLE001
                 traceback.print_exc()
                 self._update(job_id, state="error", error=str(e))

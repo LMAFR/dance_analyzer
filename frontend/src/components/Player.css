@@ -35,7 +35,6 @@
    panel grows to fill the width (and lays its controls out horizontally so it
    stays short — about the height of the mute/solo block). */
 .player.swapped .side { flex-direction: row; flex-wrap: nowrap; align-items: stretch; gap: 14px; }
-.player.swapped .side .stems { flex: 0 0 auto; }
 .player.swapped .side .beatgrid { flex: 1 1 auto; }
 
 /* Stage / video */
@@ -48,17 +47,19 @@
 .video-holder { position: absolute; inset: 0; }
 .video { width: 100%; height: 100%; object-fit: contain; display: block; background: transparent; }
 
-/* PiP: draggable + resizable, semi-transparent, grab cursor. */
+/* PiP: draggable + resizable, semi-transparent, floats over the page/fullscreen. */
 .video-holder.pip {
-  position: absolute; inset: auto; height: auto;
+  position: fixed; inset: auto; height: auto;
   border-radius: 10px; overflow: hidden;
-  cursor: grab; z-index: 3; opacity: 0.62;
+  cursor: grab; z-index: 50; opacity: 0.62;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
   transition: opacity 0.2s ease; touch-action: none;
 }
 .video-holder.pip:hover { opacity: 0.9; }
 .video-holder.pip:active { cursor: grabbing; }
-.video-holder.pip .video { height: auto; }
+/* The holder carries the video's aspect ratio (set inline), so the video fills it
+   exactly and the resize handle stays on the video's bottom-right corner. */
+.video-holder.pip .video { height: 100%; }
 .pip-resize {
   position: absolute; right: 0; bottom: 0; width: 20px; height: 20px;
   cursor: nwse-resize; touch-action: none;
@@ -73,6 +74,14 @@
 }
 .spinner-overlay.error { color: #ff9b9b; padding: 16px; text-align: center; }
 .spinner { width: 38px; height: 38px; border: 3px solid #2c3647; border-top-color: #4f9dff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+
+/* Buffering: shown over the (frozen) video while audio/graphs wait for it. */
+.buffering-overlay {
+  position: absolute; inset: 0; z-index: 4;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.32);
+}
+.buffering-overlay .spinner { width: 30px; height: 30px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Graphs */
@@ -116,16 +125,12 @@
 
 /* Side controls */
 .side { display: flex; flex-direction: column; gap: 14px; }
-.stems { display: flex; flex-direction: column; gap: 8px; }
-.stem-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #cfd6e4; }
-.stem-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
-.stem-name { flex: 1; }
-.tip { font-size: 12px; color: #6b7488; margin: 0; }
 
 /* Transport */
 .transport {
   display: flex; align-items: center; gap: 10px; padding: 8px 12px;
   background: #11141c; border: 1px solid #1c2330; border-radius: 10px;
+  flex-wrap: wrap;
 }
 .stage.fs .transport {
   position: absolute; left: 0; right: 0; bottom: 0; border: none; border-radius: 0;
@@ -134,15 +139,50 @@
 .transport .time { font-variant-numeric: tabular-nums; color: #fff; font-size: 13px; min-width: 132px; }
 .scrub { flex: 1; accent-color: #4f9dff; }
 
+/* ⋮ menu (export + speed) */
+.menu-wrap { position: relative; display: inline-flex; }
+.menu-pop {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  min-width: 188px;
+  background: #11141c;
+  border: 1px solid #2c3647;
+  border-radius: 10px;
+  padding: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.menu-item {
+  background: #1b2230; color: #cfd6e4; border: 1px solid #2c3647;
+  border-radius: 6px; padding: 7px 10px; font-size: 13px; cursor: pointer; text-align: left;
+}
+.menu-item:hover { background: #232c3d; }
+.menu-item:disabled { opacity: 0.6; cursor: default; }
+.menu-sep { height: 1px; background: #1c2330; margin: 2px 0; }
+.menu-label { font-size: 11px; color: #7c869a; padding: 0 2px; }
+.speed-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.speed-btn {
+  background: #1b2230; color: #cfd6e4; border: 1px solid #2c3647;
+  border-radius: 6px; padding: 5px 0; font-size: 12px; cursor: pointer;
+}
+.speed-btn:hover { background: #232c3d; }
+.speed-btn.active { background: #4f9dff; border-color: #4f9dff; color: #07101f; }
+
 /* Buttons */
 .btn {
   background: #1b2230; color: #cfd6e4; border: 1px solid #2c3647; border-radius: 6px;
   padding: 4px 10px; font-size: 12px; cursor: pointer; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 5px;
 }
+.btn-icon { display: inline-flex; align-items: center; }
+.btn-icon.fit { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; }
 .btn:hover { background: #232c3d; }
 .btn.active { background: #4f9dff; border-color: #4f9dff; color: #07101f; }
-.btn.solo.active { background: #ffce4f; border-color: #ffce4f; color: #07101f; }
-.btn.play { font-size: 14px; min-width: 40px; }
+.btn.play { font-size: 14px; min-width: 40px; justify-content: center; gap: 0; }
 .btn.loop-active { background: #243449; border-color: #4f9dff; color: #cfe2ff; }
 .btn.tiny { padding: 3px 7px; font-size: 11px; }
 .btn:disabled { opacity: 0.5; cursor: default; }
@@ -150,7 +190,6 @@
 /* Panels */
 .panel { background: #11141c; border: 1px solid #1c2330; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.panel-head .head-right { display: flex; align-items: center; gap: 8px; }
 
 /* Beat-grid panel: groups flow horizontally and wrap, so a wider panel is shorter. */
 .panel.beatgrid { flex-direction: row; flex-wrap: wrap; align-items: flex-start; gap: 8px 18px; }
@@ -161,8 +200,6 @@
 .beatgrid .legend { flex-direction: column; gap: 4px; align-items: flex-start; padding-top: 0; }
 .beatgrid .hint { margin: 0; }
 .panel .chk { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #e7ecf5; }
-.panel .status { font-size: 11px; color: #7c869a; }
-.panel .status.ok { color: #2ee6a6; }
 .panel .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .panel .val { font-size: 12px; color: #9aa4b6; font-variant-numeric: tabular-nums; }
 .panel .fld { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: #7c869a; }
@@ -174,10 +211,7 @@
 
 /* Fullscreen overlays */
 .overlay-graphs { position: absolute; top: 16px; right: 16px; width: min(34vw, 460px); display: flex; flex-direction: column; gap: 8px; z-index: 2; max-height: calc(100vh - 32px); overflow: auto; }
-.overlay-left { position: absolute; top: 16px; left: 16px; width: 250px; display: flex; flex-direction: column; gap: 10px; max-height: calc(100vh - 120px); overflow: auto; z-index: 4; }
-.overlay-left .overlay-stems { position: static; }
 .overlay-rail { display: flex; flex-direction: column; gap: 6px; }
-.overlay-stems { position: absolute; top: 16px; left: 16px; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: rgba(0, 0, 0, 0.4); border-radius: 10px; backdrop-filter: blur(4px); z-index: 4; }
 .overlay-controls { position: absolute; bottom: 58px; left: 16px; display: flex; flex-direction: row; gap: 12px; flex-wrap: wrap; align-items: flex-end; max-width: 70vw; z-index: 4; }
 .overlay-controls .panel { background: rgba(10, 13, 20, 0.82); backdrop-filter: blur(6px); }
 
@@ -190,13 +224,6 @@
 }
 .overlay-controls.wide .bp-measure { flex: 0 0 auto; max-width: 60vw; }
 .overlay-controls.wide .beatgrid { flex: 0 0 auto; }
-.overlay-controls.wide .mini-stems { flex: 0 0 auto; justify-content: center; overflow: hidden; padding: 8px 10px; }
-/* Compact the mute/solo rows so they fit with breathing room above the first
-   and below the last row. */
-.overlay-controls.wide .mini-stems .stems { gap: 3px; }
-.overlay-controls.wide .mini-stems .stem-row { gap: 5px; font-size: 10px; }
-.overlay-controls.wide .mini-stems .stem-dot { width: 7px; height: 7px; }
-.overlay-controls.wide .mini-stems .btn { padding: 1px 5px; font-size: 9px; }
 .overlay-controls.wide .overlay-rail {
   flex: 1 1 auto; display: flex; flex-direction: row; gap: 10px; min-width: 0;
 }
@@ -206,7 +233,56 @@
 .player.swapped .stage.fs .overlay-graphs { top: 0; left: 0; right: 0; bottom: 0; width: auto; padding: 3vh 3vw 12vh; gap: 12px; }
 
 @media (max-width: 880px) {
-  .player { grid-template-columns: 1fr; grid-template-areas: "main" "side1" "rail" "side2" "trans"; }
-  .player.swapped { grid-template-areas: "main" "vid" "rail" "opts" "trans"; }
-  .area-video.stage:not(.fs) { height: auto; width: 100%; }
+  /* Both columns AND areas must collapse — .player.swapped's own column rule has
+     higher specificity than ".player", so it must be reset explicitly here too. */
+  .player {
+    grid-template-columns: 1fr;
+    grid-template-areas: "main" "side1" "rail" "side2" "trans";
+  }
+  .player.swapped {
+    grid-template-columns: 1fr;
+    grid-template-areas: "main" "vid" "rail" "opts" "trans";
+  }
+  /* No max-height cap: the stage matches the video's aspect exactly, so a
+     portrait clip fills width with no black side bands. Rounder corners too. */
+  .area-video.stage:not(.fs) { height: auto; width: 100%; border-radius: 16px; }
+  /* On phones a lone featured graph wrapped to 3 tall rows is overkill. */
+  .player.swapped .graphs { gap: 10px; }
+}
+
+/* Phones */
+@media (max-width: 560px) {
+  .app { padding: 12px; }
+  .topbar { margin-bottom: 12px; }
+  .transport { gap: 8px; padding: 8px; }
+  .transport .time { min-width: 0; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
+  /* Scrubber takes a full row so the buttons have room to wrap below it. */
+  .transport .scrub { order: -1; flex: 1 1 100%; }
+  .btn { padding: 6px 10px; }            /* larger tap targets */
+  .btn.play { min-width: 44px; }
+  .maximize-btn, .gbtn { width: 30px; height: 30px; opacity: 0.85; }
+  .video-holder.pip { border-radius: 14px; }
+  /* Fullscreen transport wraps too (scrubber on its own row) so the time is fully visible. */
+  .stage.fs .transport { flex-wrap: wrap; }
+
+  /* Icon-only transport: drop button text labels, total time, and loop range. */
+  .transport .btn-label,
+  .transport .t-tot,
+  .transport .loop-range { display: none; }
+
+  /* Fullscreen graphs-in-main: beat-grid fills the width below the graphs. */
+  .player.swapped .stage.fs .overlay-graphs { padding: 2vh 2vw 34vh; }
+  .overlay-controls.wide { flex-wrap: wrap; left: 8px; right: 8px; bottom: 46px; }
+  .overlay-controls.wide .bp-measure { flex: 1 1 100%; max-width: none; }
+  .overlay-controls.wide .beatgrid { max-height: 26vh; overflow: auto; }
+
+  /* Fullscreen video-in-main on phones:
+     - crop the video's black bands (fill the area), and
+     - reserve the bottom of the screen so the beat-grid sits BELOW the video
+       (not overlapping it), with the transport beneath that. */
+  .stage.fs .video { object-fit: cover; }
+  .stage.fs .video-holder { bottom: 26vh; }
+  .stage.fs .overlay-controls { left: 8px; right: 8px; bottom: 84px; max-width: none; }
+  .stage.fs .overlay-controls .bp-measure { flex: 1 1 100%; }
+  .stage.fs .overlay-controls .beatgrid { width: 100%; max-height: 16vh; overflow: auto; }
 }

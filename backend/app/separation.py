@@ -26,8 +26,9 @@ from .envelope import compute_envelope
 # the start means the UI displays the stage actually in progress (important for
 # the slow "separating" step, which dominates the wall-clock time).
 STAGES = {
-    "extracting": 0.02,
-    "separating": 0.10,
+    "preparing": 0.01,   # transcode the video first -> it becomes viewable
+    "extracting": 0.06,
+    "separating": 0.12,
     "mixing": 0.82,
     "encoding": 0.88,
     "analysing": 0.96,
@@ -66,18 +67,41 @@ def _ffmpeg_extract_audio(video: Path, out_wav: Path) -> None:
 
 
 def _transcode_web_video(src: Path, out: Path) -> None:
-    """Re-encode to browser-friendly H.264 / 8-bit yuv420p.
+    """Re-encode to browser-friendly H.264 / 8-bit yuv420p, keeping the original
+    audio so the clip is watchable (with sound) while stems are still separating.
 
     Phone uploads are often HEVC (and 10-bit), which most browsers can't play in
-    a <video>. We strip the audio (the stems carry it; the player mutes the
-    video) and put the moov atom up front for streaming.
+    a <video>; moov up front for streaming.
     """
     _run([
         "ffmpeg", "-y", "-i", str(src),
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "23", "-preset", "veryfast",
-        "-movflags", "+faststart", "-an",
+        "-c:a", "aac", "-b:a", "160k",
+        "-movflags", "+faststart",
         str(out),
     ])
+
+
+def _probe_duration(path: Path) -> float:
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=nw=1:nk=1", str(path)],
+        check=True, capture_output=True, text=True,
+    )
+    return round(float(out.stdout.strip()), 3)
+
+
+def _write_manifest(tdir: Path, track_id: str, duration: float,
+                    stems: dict[str, str], env_name: str | None, ready: bool) -> None:
+    manifest = {
+        "id": track_id,
+        "duration": duration,
+        "video": "video.mp4",
+        "stems": [{"id": sid, "url": path} for sid, path in stems.items()],
+        "envelopes": env_name,
+        "ready": ready,
+    }
+    (tdir / "manifest.json").write_text(json.dumps(manifest, indent=2))
 
 
 def _demucs_separate(wav: Path, out_dir: Path) -> Path:
@@ -123,13 +147,48 @@ def _encode_m4a(wav: Path, out_m4a: Path) -> None:
     ])
 
 
+def export_clip(track_dir: str, start: float, end: float, stem_ids: list[str], out_path: str) -> None:
+    """Render a cropped clip: video trimmed to [start, end] with only the chosen
+    stems mixed as its audio. Used by the "crop + download" feature."""
+    tdir = Path(track_dir)
+    video = tdir / "video.mp4"
+    if not video.exists():
+        raise FileNotFoundError("video.mp4 missing")
+    start = max(0.0, start)
+    end = max(start + 0.1, end)
+
+    # Input 0 = video (trimmed); inputs 1..N = chosen stems (trimmed).
+    cmd = ["ffmpeg", "-y", "-ss", f"{start}", "-to", f"{end}", "-i", str(video)]
+    stems = [s for s in stem_ids if (tdir / f"{s}.m4a").exists()]
+    for s in stems:
+        cmd += ["-ss", f"{start}", "-to", f"{end}", "-i", str(tdir / f"{s}.m4a")]
+
+    if stems:
+        mix = "".join(f"[{i + 1}:a]" for i in range(len(stems)))
+        cmd += [
+            "-filter_complex", f"{mix}amix=inputs={len(stems)}:normalize=0[a]",
+            "-map", "0:v", "-map", "[a]",
+            "-c:a", "aac", "-b:a", "192k",
+        ]
+    else:
+        cmd += ["-map", "0:v", "-an"]  # all stems off -> silent clip
+
+    cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out_path]
+    _run(cmd)
+
+
 def process_track(
     video_path: str,
     track_dir: str,
     track_id: str,
     progress: ProgressCb | None = None,
+    on_video_ready: Callable[[float], None] | None = None,
 ) -> TrackResult:
-    """Run the full pipeline. Outputs land in `track_dir`."""
+    """Run the full pipeline. Outputs land in `track_dir`.
+
+    The video is transcoded first and a partial manifest (ready=false) is written
+    so the player can show/play it immediately while the stems separate.
+    """
     def report(stage: str) -> None:
         if progress:
             progress(stage, STAGES[stage])
@@ -141,22 +200,30 @@ def process_track(
 
     video = Path(video_path)
 
-    # 1. Extract audio + transcode the video to a browser-playable codec.
+    # 1. Transcode the video FIRST so it's viewable right away; publish a partial
+    #    manifest and notify the caller that the video is ready.
+    report("preparing")
+    video_out = tdir / "video.mp4"
+    _transcode_web_video(video, video_out)
+    duration = _probe_duration(video_out)
+    _write_manifest(tdir, track_id, duration, stems={}, env_name=None, ready=False)
+    if on_video_ready:
+        on_video_ready(duration)
+
+    # 2. Extract audio for separation.
     report("extracting")
     audio_wav = work / "audio.wav"
     _ffmpeg_extract_audio(video, audio_wav)
-    video_out = tdir / "video.mp4"
-    _transcode_web_video(video, video_out)
 
-    # 2. Separate (the slow CPU step that dominates wall-clock time).
+    # 3. Separate (the slow CPU step that dominates wall-clock time).
     report("separating")
     stem_dir = _demucs_separate(audio_wav, work / "demucs")
 
-    # 3. Fold 4 -> 3.
+    # 4. Fold 4 -> 3.
     report("mixing")
     folded = _fold_stems(stem_dir, work)
 
-    # 4. Encode web stems.
+    # 5. Encode web stems.
     report("encoding")
     stem_paths: dict[str, str] = {}
     for sid, wav in folded.items():
@@ -164,10 +231,9 @@ def process_track(
         _encode_m4a(wav, m4a)
         stem_paths[sid] = m4a.name
 
-    # 5. Envelopes.
+    # 6. Envelopes.
     report("analysing")
     envelopes: dict[str, object] = {}
-    duration = 0.0
     for sid, wav in folded.items():
         samples, dur = compute_envelope(str(wav))
         envelopes[sid] = samples
@@ -176,24 +242,14 @@ def process_track(
     env_path = tdir / "envelopes.json"
     env_path.write_text(json.dumps(env_doc))
 
-    result = TrackResult(
+    # 7. Finalize: full manifest (ready=true).
+    _write_manifest(tdir, track_id, round(duration, 3), stem_paths, env_path.name, ready=True)
+
+    shutil.rmtree(work, ignore_errors=True)
+    return TrackResult(
         track_id=track_id,
         duration=round(duration, 3),
         video=video_out.name,
         stems=stem_paths,
         envelopes_path=env_path.name,
     )
-    manifest = {
-        "id": track_id,
-        "duration": result.duration,
-        "video": result.video,
-        "stems": [
-            {"id": sid, "url": path} for sid, path in stem_paths.items()
-        ],
-        "envelopes": env_path.name,
-    }
-    (tdir / "manifest.json").write_text(json.dumps(manifest, indent=2))
-
-    # Clean intermediate files.
-    shutil.rmtree(work, ignore_errors=True)
-    return result

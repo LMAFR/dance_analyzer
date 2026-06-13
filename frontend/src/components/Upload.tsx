@@ -26,7 +26,9 @@ export function Upload({ onReady }: UploadProps) {
         try {
           const status = await getJob(jobId);
           setJob(status);
-          if (status.state === 'done' && status.track_id) {
+          // Hand off as soon as the video is viewable (stems keep separating in
+          // the background) — or at done if we somehow missed video_ready.
+          if ((status.video_ready || status.state === 'done') && status.track_id) {
             onReady(status.track_id);
             return;
           }
@@ -47,7 +49,7 @@ export function Upload({ onReady }: UploadProps) {
   const handleFile = useCallback(
     async (file: File) => {
       setError(null);
-      setJob({ id: '', state: 'queued', stage: '', progress: 0, track_id: null, error: null });
+      setJob({ id: '', state: 'queued', stage: '', progress: 0, track_id: null, video_ready: false, error: null });
       try {
         const jobId = await uploadVideo(file);
         poll(jobId);
