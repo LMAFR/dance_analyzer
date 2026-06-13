@@ -73,6 +73,11 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   const [loopRegion, setLoopRegion] = useState<{ start: number; end: number } | null>(null);
   const [exporting, setExporting] = useState(false);
   const [view, setView] = useState<{ start: number; end: number } | null>(null); // zoom/pan window
+  // Drag-to-loop is opt-in (off by default on phones, so a drag doesn't make a
+  // loop and single-finger drag stays free; two-finger pinch still zooms).
+  const [loopEnabled, setLoopEnabled] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth > 880 : true
+  );
   const [vh, setVh] = useState(typeof window !== 'undefined' ? window.innerHeight : 800);
   const [vw, setVw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280);
   const isMobile = vw <= 880;
@@ -330,8 +335,8 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   const graphProps = (s: StemConfig) => ({
     label: s.label, color: s.color, envelope: envelopes[s.id] ?? [],
     currentTime: time, duration, active: isActive(s.id), onSeek: seek,
-    markers, loopRegion, onSelectRegion, pickMode: pickMode !== 'none', onPick,
-    onViewChange,
+    markers, loopRegion, onSelectRegion: loopEnabled ? onSelectRegion : undefined,
+    pickMode: pickMode !== 'none', onPick, onViewChange,
   });
 
   const graphControls = (id: string, inMain: boolean) => (
@@ -448,9 +453,17 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
       </span>
       <input className="scrub" type="range" min={0} max={duration || 0} step={0.001}
         value={time} onChange={(e) => seek(Number(e.target.value))} />
+      <button
+        className={loopEnabled ? 'btn active' : 'btn'}
+        onClick={() => setLoopEnabled((v) => !v)}
+        title={loopEnabled ? 'Loop-drag on — drag a graph to loop a section' : 'Loop-drag off — drag does not create loops'}
+      >
+        <span className="btn-icon">🔁</span>
+        <span className="btn-label">{loopEnabled ? 'Loop on' : 'Loop off'}</span>
+      </button>
       {loopRegion && (
-        <button className="btn loop-active" onClick={clearLoop} title="Stop looping">
-          🔁 <span className="loop-range">{fmtTime(loopRegion.start)}–{fmtTime(loopRegion.end)} </span>✕
+        <button className="btn loop-active" onClick={clearLoop} title="Clear the looped section">
+          <span className="loop-range">{fmtTime(loopRegion.start)}–{fmtTime(loopRegion.end)} </span>✕
         </button>
       )}
       {view && (
