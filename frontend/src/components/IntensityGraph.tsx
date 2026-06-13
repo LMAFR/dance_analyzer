@@ -293,15 +293,18 @@ export function IntensityGraph({
     setDragPx(null);
     if (wasGesture.current) { wasGesture.current = false; return; }
 
-    if (Math.abs(x1 - x0) < DRAG_PX || !onSelectRegion) {
+    if (Math.abs(x1 - x0) < DRAG_PX) {
+      // A tap seeks (or sets the beat anchor in pick mode).
       const t = timeAtX(e.clientX, rect);
       if (pickMode) onPick?.(t);
       else onSeek?.(t);
-    } else {
+    } else if (onSelectRegion) {
+      // A drag selects a loop region (only when looping is enabled).
       const ta = timeAtX(rect.left + Math.min(x0, x1), rect);
       const tb = timeAtX(rect.left + Math.max(x0, x1), rect);
       onSelectRegion(ta, tb);
     }
+    // Otherwise (drag with looping off): inspect only — don't move the playhead.
   };
 
   const onWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {

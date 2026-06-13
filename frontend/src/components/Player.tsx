@@ -203,9 +203,15 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   const toggleFullscreen = useCallback(() => {
     const stage = stageRef.current;
     if (!stage) return;
-    if (!document.fullscreenElement) stage.requestFullscreen?.();
-    else document.exitFullscreen?.();
-  }, []);
+    if (!document.fullscreenElement) {
+      // On phones, fullscreen means "video big" — graphs-in-main fullscreen looks
+      // the same as windowed, so force video-in-main first.
+      if (isMobile) setSwapped(false);
+      stage.requestFullscreen?.();
+    } else {
+      document.exitFullscreen?.();
+    }
+  }, [isMobile]);
 
   const onPick = useCallback(
     (t: number) => {
@@ -488,7 +494,7 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   return (
     <div className={`player ${swapped ? 'swapped' : ''}`}>
       <div
-        className={`area-video stage ${fullscreen ? 'fs' : ''} ${pipActive && !fullscreen ? 'collapsed' : ''}`}
+        className={`area-video stage ${fullscreen ? 'fs' : ''}`}
         ref={stageRef}
         style={{
           aspectRatio: fullscreen || pipActive ? undefined : videoAspect,
