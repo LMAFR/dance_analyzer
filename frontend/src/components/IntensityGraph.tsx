@@ -69,6 +69,8 @@ export function IntensityGraph({
   const pointers = useRef<Map<number, number>>(new Map()); // id -> clientX
   const pinch = useRef<{ dist: number; mid: number } | null>(null);
   const wasGesture = useRef(false);
+  const panLast = useRef<number | null>(null); // single-finger pan (when zoomed)
+  const didPan = useRef(false);
 
   // Redraw sharply whenever the canvas is resized (avoids the blurry-then-sharp race).
   useEffect(() => {
@@ -252,6 +254,8 @@ export function IntensityGraph({
     }
     const x = e.clientX - rect.left;
     dragStart.current = x;
+    panLast.current = x;
+    didPan.current = false;
     if (onSelectRegion) setDragPx({ a: x, b: x });
   };
 
@@ -276,6 +280,24 @@ export function IntensityGraph({
 
     const x = e.clientX - rect.left;
     setHoverPx(x);
+
+    // Single-finger lateral pan while zoomed in (when looping is off, so a drag
+    // isn't already claimed for loop selection).
+    const span = winEnd - winStart;
+    if (
+      dragStart.current !== null && onViewChange && !onSelectRegion &&
+      panLast.current !== null && span < duration - 0.05
+    ) {
+      const delta = x - panLast.current;
+      if (delta !== 0) {
+        const dt = -(delta / rect.width) * span;
+        onViewChange(winStart + dt, winEnd + dt);
+        panLast.current = x;
+        didPan.current = true;
+      }
+      return;
+    }
+
     if (dragStart.current !== null && onSelectRegion) setDragPx({ a: dragStart.current, b: x });
   };
 
@@ -292,8 +314,10 @@ export function IntensityGraph({
     const x0 = dragStart.current;
     const x1 = e.clientX - rect.left;
     dragStart.current = null;
+    panLast.current = null;
     setDragPx(null);
     if (wasGesture.current) { wasGesture.current = false; return; }
+    if (didPan.current) { didPan.current = false; return; } // panned -> not a tap/loop
 
     if (Math.abs(x1 - x0) < DRAG_PX) {
       // A tap seeks (or sets the beat anchor in pick mode).

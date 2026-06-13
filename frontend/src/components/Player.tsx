@@ -160,8 +160,9 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
       // Bigger by default on phones (12% is unusably small there).
       const frac = isMobile ? 0.42 : 0.12;
       const w = Math.round(window.innerWidth * frac);
-      // Sit lower and a bit further left so it clears each graph's expand/mute buttons.
-      const margin = Math.round(window.innerWidth * 0.07);
+      // Sit lower and further left (more inset on phones) so it clears each
+      // graph's top-right expand/mute buttons.
+      const margin = Math.round(window.innerWidth * (isMobile ? 0.16 : 0.07));
       setPip({ x: window.innerWidth - w - margin, y: Math.round(window.innerHeight * 0.12), w });
     }
     if (!pipActive && pip) setPip(null);
@@ -189,8 +190,9 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   }, []);
 
   const maximizeGraph = (id: string) => {
-    // On phones there's no featured/rail split — just toggle into graphs-in-main.
-    if (isMobile) { setSwapped(true); return; }
+    // On phones there's no featured/rail split — the button just toggles between
+    // graphs-in-main and video-in-main.
+    if (isMobile) { setSwapped((s) => !s); return; }
     if (!swapped) { setFeatured(new Set([id])); setSwapped(true); return; }
     const next = new Set(featured);
     if (next.has(id)) next.delete(id);
@@ -337,6 +339,19 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
 
   const markers = useMemo(() => computeStepMarkers(beatCfg, duration), [beatCfg, duration]);
 
+  // While zoomed and playing, scroll the window to keep the playhead centered so
+  // you always see the graph around the current moment. (When paused, the view
+  // is whatever you panned/zoomed to.)
+  const renderView = useMemo(() => {
+    if (!view) return null;
+    if (!playing) return view;
+    const span = view.end - view.start;
+    let s = time - span / 2;
+    if (s < 0) s = 0;
+    if (s + span > duration) s = Math.max(0, duration - span);
+    return { start: s, end: Math.min(duration, s + span) };
+  }, [view, playing, time, duration]);
+
   const isActive = (id: string) => !muted[id];
   const loading = !ready || !videoReady;
 
@@ -378,8 +393,8 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
           {...graphProps(s)}
           overlay={overlay}
           height={height}
-          tStart={view?.start}
-          tEnd={view?.end}
+          tStart={renderView?.start}
+          tEnd={renderView?.end}
         />
         {graphControls(s.id, swapped && featured.has(s.id))}
       </div>
