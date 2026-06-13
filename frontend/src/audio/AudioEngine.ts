@@ -216,16 +216,20 @@ export class AudioEngine {
 
   async play() {
     if (this.playing) return;
-    if (this.ctx.state === 'suspended') await this.ctx.resume();
     // If a loop is set and we're parked outside it, enter at the loop start.
     if (this.loopRegion) {
       const { start, end } = this.loopRegion;
       if (this.startOffset < start || this.startOffset >= end) this.startOffset = start;
     }
-    this.startSourcesAt(this.startOffset);
+    // Start the video FIRST, synchronously inside the user's tap. iOS blocks
+    // video.play() if it's called after an `await` (e.g. ctx.resume()), so the
+    // video would stay black while only the Web Audio stems played.
     this.video.currentTime = this.startOffset;
     this.video.playbackRate = this._rate;
-    await this.video.play().catch(() => {});
+    const videoPlay = this.video.play();
+    if (videoPlay) videoPlay.catch(() => {});
+    if (this.ctx.state === 'suspended') await this.ctx.resume();
+    this.startSourcesAt(this.startOffset);
     this.playing = true;
     this.loop();
   }
