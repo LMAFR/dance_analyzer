@@ -211,23 +211,29 @@
   .app { padding: 12px; }
   .topbar { margin-bottom: 12px; }
   .transport { gap: 8px; padding: 8px; }
-  .transport .time { min-width: 0; font-size: 12px; }
+  .transport .time { min-width: 0; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
   /* Scrubber takes a full row so the buttons have room to wrap below it. */
   .transport .scrub { order: -1; flex: 1 1 100%; }
   .btn { padding: 6px 10px; }            /* larger tap targets */
   .btn.play { min-width: 44px; }
   .maximize-btn, .gbtn { width: 30px; height: 30px; opacity: 0.85; }
-  .stage.fs .transport { flex-wrap: nowrap; overflow-x: auto; }
+  /* Fullscreen transport wraps too (scrubber on its own row) so the time is fully visible. */
+  .stage.fs .transport { flex-wrap: wrap; }
 
   /* Icon-only transport: drop button text labels, total time, and loop range. */
   .transport .btn-label,
   .transport .t-tot,
   .transport .loop-range { display: none; }
 
-  /* Fullscreen graphs-in-main: beat-grid fills the width below the graphs
-     instead of floating over the third graph. */
+  /* Fullscreen graphs-in-main: beat-grid fills the width below the graphs. */
   .player.swapped .stage.fs .overlay-graphs { padding: 2vh 2vw 34vh; }
   .overlay-controls.wide { flex-wrap: wrap; left: 8px; right: 8px; bottom: 46px; }
   .overlay-controls.wide .bp-measure { flex: 1 1 100%; max-width: none; }
   .overlay-controls.wide .beatgrid { max-height: 26vh; overflow: auto; }
+
+  /* Fullscreen video-in-main: beat-grid is a full-width bar at the bottom
+     (above the transport), not a small box floating over the dancers. */
+  .stage.fs .overlay-controls { left: 8px; right: 8px; bottom: 84px; max-width: none; }
+  .stage.fs .overlay-controls .bp-measure { flex: 1 1 100%; }
+  .stage.fs .overlay-controls .beatgrid { width: 100%; max-height: 30vh; overflow: auto; }
 }

@@ -158,7 +158,7 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   useEffect(() => {
     if (pipActive && !pip) {
       // Bigger by default on phones (12% is unusably small there).
-      const frac = isMobile ? 0.5 : 0.12;
+      const frac = isMobile ? 0.42 : 0.12;
       const w = Math.round(window.innerWidth * frac);
       // Sit lower and a bit further left so it clears each graph's expand/mute buttons.
       const margin = Math.round(window.innerWidth * 0.07);

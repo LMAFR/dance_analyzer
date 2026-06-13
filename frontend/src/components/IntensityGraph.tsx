@@ -108,7 +108,9 @@ export function IntensityGraph({
     const xOfTime = (t: number) => ((t - winStart) / span) * w;
     const yOf = (v: number) => h - v * (h - 6) - 3;
 
-    ctx.fillStyle = overlay ? 'rgba(0,0,0,0.28)' : '#11141c';
+    // Overlay graphs (over the fullscreen video) stay mostly see-through so the
+    // video is easy to watch behind them; the playhead below remains crisp.
+    ctx.fillStyle = overlay ? 'rgba(0,0,0,0.12)' : '#11141c';
     ctx.fillRect(0, 0, w, h);
 
     // Loop region shading (clipped to window).
@@ -139,7 +141,7 @@ export function IntensityGraph({
       for (let i = i0; i <= i1; i++) ctx.lineTo(xOfTime(timeOfIdx(i)), yOf(envelope[i]));
       ctx.lineTo(xOfTime(timeOfIdx(i1)), h);
       ctx.closePath();
-      ctx.globalAlpha = (overlay ? 0.35 : 0.25) * dim;
+      ctx.globalAlpha = (overlay ? 0.18 : 0.25) * dim;
       ctx.fillStyle = color;
       ctx.fill();
 
@@ -150,7 +152,7 @@ export function IntensityGraph({
         if (i === i0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
-      ctx.globalAlpha = dim;
+      ctx.globalAlpha = (overlay ? 0.8 : 1) * dim;
       ctx.lineWidth = 1.5;
       ctx.strokeStyle = color;
       ctx.stroke();
