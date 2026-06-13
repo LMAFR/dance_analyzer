@@ -75,6 +75,7 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   const [view, setView] = useState<{ start: number; end: number } | null>(null); // zoom/pan window
   const [vh, setVh] = useState(typeof window !== 'undefined' ? window.innerHeight : 800);
   const [vw, setVw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280);
+  const isMobile = vw <= 880;
   const [pip, setPip] = useState<Pip | null>(null);
   const [beatBarH, setBeatBarH] = useState(0);
   const beatRef = useRef<HTMLDivElement>(null);
@@ -139,11 +140,13 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
     return () => ro.disconnect();
   }, [fullscreen, swapped]);
 
-  const pipActive = fullscreen && swapped;
+  // The video floats as a PiP whenever graphs own the main area in fullscreen,
+  // or on phones (where graphs-in-main always uses the floating PiP).
+  const pipActive = swapped && (fullscreen || isMobile);
   useEffect(() => {
     if (pipActive && !pip) {
       // Bigger by default on phones (12% is unusably small there).
-      const frac = window.innerWidth < 640 ? 0.4 : 0.12;
+      const frac = isMobile ? 0.5 : 0.12;
       const w = Math.round(window.innerWidth * frac);
       // Sit lower and a bit further left so it clears each graph's expand/mute buttons.
       const margin = Math.round(window.innerWidth * 0.07);
@@ -174,6 +177,8 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   }, []);
 
   const maximizeGraph = (id: string) => {
+    // On phones there's no featured/rail split — just toggle into graphs-in-main.
+    if (isMobile) { setSwapped(true); return; }
     if (!swapped) { setFeatured(new Set([id])); setSwapped(true); return; }
     const next = new Set(featured);
     if (next.has(id)) next.delete(id);
@@ -317,8 +322,10 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   const isActive = (id: string) => !muted[id];
   const loading = !ready || !videoReady;
 
-  const featuredStems = stems.filter((s) => featured.has(s.id));
-  const railStems = stems.filter((s) => !featured.has(s.id));
+  // On phones we keep it simple: all three graphs live in the main area (no
+  // featured/rail split), and the video floats as a PiP over them.
+  const featuredStems = isMobile ? stems : stems.filter((s) => featured.has(s.id));
+  const railStems = isMobile ? [] : stems.filter((s) => !featured.has(s.id));
 
   const graphProps = (s: StemConfig) => ({
     label: s.label, color: s.color, envelope: envelopes[s.id] ?? [],
@@ -394,6 +401,12 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   // The main graph area. "big" = windowed main, or graphs filling the fullscreen
   // screen (swapped); otherwise it's a small overlay floating on the video.
   const renderMain = (overlay: boolean) => {
+    // Mobile: the three graphs, equal size, no wrapping/featuring.
+    if (isMobile) {
+      const c = featuredStems.length || 1;
+      const h = Math.max(150, Math.floor((vh - (overlay ? 150 : 210)) / c));
+      return renderGraphs(featuredStems, overlay, h);
+    }
     const big = !overlay || swapped;
     // A lone graph wraps to 3 rows only at full view; once zoomed/panned it
     // becomes a single windowed graph the user can pan/zoom freely.
@@ -464,13 +477,14 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   return (
     <div className={`player ${swapped ? 'swapped' : ''}`}>
       <div
-        className={`area-video stage ${fullscreen ? 'fs' : ''}`}
+        className={`area-video stage ${fullscreen ? 'fs' : ''} ${pipActive && !fullscreen ? 'collapsed' : ''}`}
         ref={stageRef}
         style={{
-          aspectRatio: fullscreen ? undefined : videoAspect,
+          aspectRatio: fullscreen || pipActive ? undefined : videoAspect,
           // The desktop two-column height math doesn't apply once the layout
-          // collapses to one column on phones (CSS handles it there).
-          height: !fullscreen && swapped && vw > 880 ? swappedVideoH : undefined,
+          // collapses to one column on phones (CSS handles it there). When the
+          // video floats as a PiP (mobile), the stage cell collapses.
+          height: pipActive && !fullscreen ? 0 : (!fullscreen && swapped && vw > 880 ? swappedVideoH : undefined),
         }}
       >
         <div
