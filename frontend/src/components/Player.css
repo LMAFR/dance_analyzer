@@ -120,6 +120,7 @@
 .transport {
   display: flex; align-items: center; gap: 10px; padding: 8px 12px;
   background: #11141c; border: 1px solid #1c2330; border-radius: 10px;
+  flex-wrap: wrap;
 }
 .stage.fs .transport {
   position: absolute; left: 0; right: 0; bottom: 0; border: none; border-radius: 0;
@@ -188,5 +189,22 @@
 @media (max-width: 880px) {
   .player { grid-template-columns: 1fr; grid-template-areas: "main" "side1" "rail" "side2" "trans"; }
   .player.swapped { grid-template-areas: "main" "vid" "rail" "opts" "trans"; }
-  .area-video.stage:not(.fs) { height: auto; width: 100%; }
+  .area-video.stage:not(.fs) { height: auto; width: 100%; max-height: 60vh; }
+  .player.swapped .area-video.stage:not(.fs) { height: auto; max-height: 40vh; }
+  /* On phones a lone featured graph wrapped to 3 tall rows is overkill. */
+  .player.swapped .graphs { gap: 10px; }
+}
+
+/* Phones */
+@media (max-width: 560px) {
+  .app { padding: 12px; }
+  .topbar { margin-bottom: 12px; }
+  .transport { gap: 8px; padding: 8px; }
+  .transport .time { min-width: 0; font-size: 12px; }
+  /* Scrubber takes a full row so the buttons have room to wrap below it. */
+  .transport .scrub { order: -1; flex: 1 1 100%; }
+  .btn { padding: 6px 10px; }            /* larger tap targets */
+  .btn.play { min-width: 44px; }
+  .maximize-btn, .gbtn { width: 30px; height: 30px; opacity: 0.85; }
+  .stage.fs .transport { flex-wrap: nowrap; overflow-x: auto; }
 }
