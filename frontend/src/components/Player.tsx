@@ -581,7 +581,7 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
       >
         <div
           className={`video-holder ${pipActive ? 'pip' : ''}`}
-          style={pipActive && pip ? { left: pip.x, top: pip.y, width: pip.w } : undefined}
+          style={pipActive && pip ? { left: pip.x, top: pip.y, width: pip.w, aspectRatio: videoAspect } : undefined}
           onPointerDown={pipActive ? onPipPointerDown : undefined}
           onPointerMove={pipActive ? onPipPointerMove : undefined}
           onPointerUp={pipActive ? onPipPointerUp : undefined}

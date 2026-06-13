@@ -57,7 +57,9 @@
 }
 .video-holder.pip:hover { opacity: 0.9; }
 .video-holder.pip:active { cursor: grabbing; }
-.video-holder.pip .video { height: auto; }
+/* The holder carries the video's aspect ratio (set inline), so the video fills it
+   exactly and the resize handle stays on the video's bottom-right corner. */
+.video-holder.pip .video { height: 100%; }
 .pip-resize {
   position: absolute; right: 0; bottom: 0; width: 20px; height: 20px;
   cursor: nwse-resize; touch-action: none;
