@@ -22,14 +22,18 @@ from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel
+from starlette.background import BackgroundTask
 
 from .jobs import JobManager
+from .separation import export_clip
 
 DATA_DIR = Path(
     os.environ.get("DANCERSDECK_DATA_DIR", str(Path(__file__).resolve().parent.parent / "data"))
 )
 MAX_BYTES = int(os.environ.get("DANCERSDECK_MAX_MB", "200")) * 1024 * 1024
 MAX_DURATION = float(os.environ.get("DANCERSDECK_MAX_SECS", "600"))  # 10 min
+MAX_TRACKS = int(os.environ.get("DANCERSDECK_MAX_TRACKS", "40"))
 ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
 ALLOWED_SUFFIXES = {".mp4", ".mov", ".webm", ".mkv", ".m4v", ".avi"}
 
@@ -41,7 +45,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-jobs = JobManager(DATA_DIR)
+jobs = JobManager(DATA_DIR, max_tracks=MAX_TRACKS)
 
 
 def _probe_duration(path: str) -> float | None:
@@ -117,6 +121,36 @@ def track_file(track_id: str, filename: str) -> FileResponse:
     if root not in path.parents or not path.exists():
         raise HTTPException(404, "File not found")
     return FileResponse(path)
+
+
+class ExportRequest(BaseModel):
+    start: float
+    end: float
+    stems: list[str]
+
+
+@app.post("/api/tracks/{track_id}/export")
+def export(track_id: str, req: ExportRequest) -> FileResponse:
+    track_dir = (DATA_DIR / track_id).resolve()
+    if not (track_dir / "manifest.json").exists():
+        raise HTTPException(404, "Track not found")
+    if req.end <= req.start:
+        raise HTTPException(400, "end must be after start")
+
+    out = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+    out.close()
+    try:
+        export_clip(str(track_dir), req.start, req.end, req.stems, out.name)
+    except Exception as e:  # noqa: BLE001
+        Path(out.name).unlink(missing_ok=True)
+        raise HTTPException(500, f"Export failed: {e}")
+
+    return FileResponse(
+        out.name,
+        media_type="video/mp4",
+        filename=f"{track_id}_clip.mp4",
+        background=BackgroundTask(lambda: Path(out.name).unlink(missing_ok=True)),
+    )
 
 
 @app.get("/api/health")

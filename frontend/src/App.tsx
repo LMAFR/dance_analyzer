@@ -73,7 +73,7 @@ export default function App() {
       {!trackId && <Upload onReady={setTrackId} />}
       {trackId && !track && !error && <p className="status">Loading track…</p>}
       {error && <p className="status error">{error}</p>}
-      {track && <Player videoUrl={track.videoUrl} stems={track.stems} />}
+      {track && trackId && <Player trackId={trackId} videoUrl={track.videoUrl} stems={track.stems} />}
     </div>
   );
 }

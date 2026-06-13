@@ -6,6 +6,7 @@ swapped for RQ/Celery + Redis later (Milestone 6) without touching the API layer
 """
 from __future__ import annotations
 
+import shutil
 import threading
 import traceback
 import uuid
@@ -31,14 +32,27 @@ class Job:
 
 
 class JobManager:
-    def __init__(self, data_dir: Path):
+    def __init__(self, data_dir: Path, max_tracks: int = 40):
         self.data_dir = data_dir
+        self.max_tracks = max_tracks
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
         self._queue: "Queue[tuple[str, str]]" = Queue()
         self._worker = threading.Thread(target=self._run, daemon=True)
         self._worker.start()
+
+    def _prune_tracks(self) -> None:
+        """Keep only the most recent `max_tracks` processed tracks (by mtime)."""
+        if self.max_tracks <= 0:
+            return
+        tracks = [
+            d for d in self.data_dir.iterdir()
+            if d.is_dir() and (d / "manifest.json").exists()
+        ]
+        tracks.sort(key=lambda d: d.stat().st_mtime, reverse=True)
+        for old in tracks[self.max_tracks:]:
+            shutil.rmtree(old, ignore_errors=True)
 
     def submit(self, video_path: str) -> str:
         job_id = uuid.uuid4().hex[:12]
@@ -76,6 +90,7 @@ class JobManager:
                 self._update(
                     job_id, state="done", stage="", progress=1.0, track_id=track_id
                 )
+                self._prune_tracks()
             except Exception as e:  # noqa: BLE001
                 traceback.print_exc()
                 self._update(job_id, state="error", error=str(e))

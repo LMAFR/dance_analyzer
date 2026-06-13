@@ -123,6 +123,36 @@ def _encode_m4a(wav: Path, out_m4a: Path) -> None:
     ])
 
 
+def export_clip(track_dir: str, start: float, end: float, stem_ids: list[str], out_path: str) -> None:
+    """Render a cropped clip: video trimmed to [start, end] with only the chosen
+    stems mixed as its audio. Used by the "crop + download" feature."""
+    tdir = Path(track_dir)
+    video = tdir / "video.mp4"
+    if not video.exists():
+        raise FileNotFoundError("video.mp4 missing")
+    start = max(0.0, start)
+    end = max(start + 0.1, end)
+
+    # Input 0 = video (trimmed); inputs 1..N = chosen stems (trimmed).
+    cmd = ["ffmpeg", "-y", "-ss", f"{start}", "-to", f"{end}", "-i", str(video)]
+    stems = [s for s in stem_ids if (tdir / f"{s}.m4a").exists()]
+    for s in stems:
+        cmd += ["-ss", f"{start}", "-to", f"{end}", "-i", str(tdir / f"{s}.m4a")]
+
+    if stems:
+        mix = "".join(f"[{i + 1}:a]" for i in range(len(stems)))
+        cmd += [
+            "-filter_complex", f"{mix}amix=inputs={len(stems)}:normalize=0[a]",
+            "-map", "0:v", "-map", "[a]",
+            "-c:a", "aac", "-b:a", "192k",
+        ]
+    else:
+        cmd += ["-map", "0:v", "-an"]  # all stems off -> silent clip
+
+    cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out_path]
+    _run(cmd)
+
+
 def process_track(
     video_path: str,
     track_dir: str,

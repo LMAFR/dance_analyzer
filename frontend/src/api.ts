@@ -54,3 +54,22 @@ export async function getEnvelopes(
 
 export const trackFileUrl = (trackId: string, filename: string) =>
   `/api/tracks/${trackId}/${filename}`;
+
+/** Render a cropped clip (time range + chosen stems) and return it as a Blob. */
+export async function exportClip(
+  trackId: string,
+  start: number,
+  end: number,
+  stems: string[]
+): Promise<Blob> {
+  const res = await fetch(`/api/tracks/${trackId}/export`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ start, end, stems }),
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    throw new Error(detail.detail ?? 'Export failed');
+  }
+  return res.blob();
+}

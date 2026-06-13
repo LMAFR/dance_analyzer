@@ -4,6 +4,7 @@ import { IntensityGraph } from './IntensityGraph';
 import { BeatGridPanel, type PickMode } from './BeatGridPanel';
 import { computeStepMarkers, DEFAULT_BEATGRID, type BeatGridConfig } from '../beatgrid';
 import { fmtTime } from '../format';
+import { exportClip } from '../api';
 import './Player.css';
 
 export interface StemConfig {
@@ -15,6 +16,7 @@ export interface StemConfig {
 }
 
 interface PlayerProps {
+  trackId: string;
   videoUrl: string;
   stems: StemConfig[];
 }
@@ -49,7 +51,7 @@ const MuteIcon = ({ muted }: { muted: boolean }) => (
   </svg>
 );
 
-export function Player({ videoUrl, stems }: PlayerProps) {
+export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<AudioEngine | null>(null);
@@ -69,6 +71,7 @@ export function Player({ videoUrl, stems }: PlayerProps) {
   const [beatCfg, setBeatCfg] = useState<BeatGridConfig>(DEFAULT_BEATGRID);
   const [pickMode, setPickMode] = useState<PickMode>('none');
   const [loopRegion, setLoopRegion] = useState<{ start: number; end: number } | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [vh, setVh] = useState(typeof window !== 'undefined' ? window.innerHeight : 800);
   const [pip, setPip] = useState<Pip | null>(null);
   const [beatBarH, setBeatBarH] = useState(0);
@@ -208,6 +211,30 @@ export function Player({ videoUrl, stems }: PlayerProps) {
     engineRef.current?.clearLoop();
     setLoopRegion(null);
   }, []);
+
+  // Export a clip: crop to the loop region (or whole track) with the currently
+  // audible (un-muted) stems mixed as the audio.
+  const onExport = useCallback(async () => {
+    const start = loopRegion?.start ?? 0;
+    const end = loopRegion?.end ?? duration;
+    const chosen = stems.filter((s) => !muted[s.id]).map((s) => s.id);
+    setExporting(true);
+    try {
+      const blob = await exportClip(trackId, start, end, chosen);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${trackId}_clip.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(`Export failed: ${e instanceof Error ? e.message : e}`);
+    } finally {
+      setExporting(false);
+    }
+  }, [trackId, loopRegion, duration, stems, muted]);
 
   // PiP drag / resize. Pointer capture is tracked and released defensively:
   // Firefox can drop the implicit pointerup release when the captured subtree
@@ -379,6 +406,14 @@ export function Player({ videoUrl, stems }: PlayerProps) {
           🔁 {fmtTime(loopRegion.start)}–{fmtTime(loopRegion.end)} ✕
         </button>
       )}
+      <button
+        className="btn"
+        onClick={onExport}
+        disabled={exporting || loading}
+        title="Download the looped section (or whole track) with the audible layers"
+      >
+        {exporting ? 'Exporting…' : '⤓ Export'}
+      </button>
       <button className="btn" onClick={toggleFullscreen}>{fullscreen ? 'Exit FS' : 'Fullscreen'}</button>
     </div>
   );

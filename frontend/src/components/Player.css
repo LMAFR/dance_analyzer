@@ -35,7 +35,6 @@
    panel grows to fill the width (and lays its controls out horizontally so it
    stays short — about the height of the mute/solo block). */
 .player.swapped .side { flex-direction: row; flex-wrap: nowrap; align-items: stretch; gap: 14px; }
-.player.swapped .side .stems { flex: 0 0 auto; }
 .player.swapped .side .beatgrid { flex: 1 1 auto; }
 
 /* Stage / video */
@@ -116,11 +115,6 @@
 
 /* Side controls */
 .side { display: flex; flex-direction: column; gap: 14px; }
-.stems { display: flex; flex-direction: column; gap: 8px; }
-.stem-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #cfd6e4; }
-.stem-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
-.stem-name { flex: 1; }
-.tip { font-size: 12px; color: #6b7488; margin: 0; }
 
 /* Transport */
 .transport {
@@ -141,7 +135,6 @@
 }
 .btn:hover { background: #232c3d; }
 .btn.active { background: #4f9dff; border-color: #4f9dff; color: #07101f; }
-.btn.solo.active { background: #ffce4f; border-color: #ffce4f; color: #07101f; }
 .btn.play { font-size: 14px; min-width: 40px; }
 .btn.loop-active { background: #243449; border-color: #4f9dff; color: #cfe2ff; }
 .btn.tiny { padding: 3px 7px; font-size: 11px; }
@@ -150,7 +143,6 @@
 /* Panels */
 .panel { background: #11141c; border: 1px solid #1c2330; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.panel-head .head-right { display: flex; align-items: center; gap: 8px; }
 
 /* Beat-grid panel: groups flow horizontally and wrap, so a wider panel is shorter. */
 .panel.beatgrid { flex-direction: row; flex-wrap: wrap; align-items: flex-start; gap: 8px 18px; }
@@ -161,8 +153,6 @@
 .beatgrid .legend { flex-direction: column; gap: 4px; align-items: flex-start; padding-top: 0; }
 .beatgrid .hint { margin: 0; }
 .panel .chk { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #e7ecf5; }
-.panel .status { font-size: 11px; color: #7c869a; }
-.panel .status.ok { color: #2ee6a6; }
 .panel .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .panel .val { font-size: 12px; color: #9aa4b6; font-variant-numeric: tabular-nums; }
 .panel .fld { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: #7c869a; }
@@ -174,10 +164,7 @@
 
 /* Fullscreen overlays */
 .overlay-graphs { position: absolute; top: 16px; right: 16px; width: min(34vw, 460px); display: flex; flex-direction: column; gap: 8px; z-index: 2; max-height: calc(100vh - 32px); overflow: auto; }
-.overlay-left { position: absolute; top: 16px; left: 16px; width: 250px; display: flex; flex-direction: column; gap: 10px; max-height: calc(100vh - 120px); overflow: auto; z-index: 4; }
-.overlay-left .overlay-stems { position: static; }
 .overlay-rail { display: flex; flex-direction: column; gap: 6px; }
-.overlay-stems { position: absolute; top: 16px; left: 16px; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: rgba(0, 0, 0, 0.4); border-radius: 10px; backdrop-filter: blur(4px); z-index: 4; }
 .overlay-controls { position: absolute; bottom: 58px; left: 16px; display: flex; flex-direction: row; gap: 12px; flex-wrap: wrap; align-items: flex-end; max-width: 70vw; z-index: 4; }
 .overlay-controls .panel { background: rgba(10, 13, 20, 0.82); backdrop-filter: blur(6px); }
 
@@ -190,13 +177,6 @@
 }
 .overlay-controls.wide .bp-measure { flex: 0 0 auto; max-width: 60vw; }
 .overlay-controls.wide .beatgrid { flex: 0 0 auto; }
-.overlay-controls.wide .mini-stems { flex: 0 0 auto; justify-content: center; overflow: hidden; padding: 8px 10px; }
-/* Compact the mute/solo rows so they fit with breathing room above the first
-   and below the last row. */
-.overlay-controls.wide .mini-stems .stems { gap: 3px; }
-.overlay-controls.wide .mini-stems .stem-row { gap: 5px; font-size: 10px; }
-.overlay-controls.wide .mini-stems .stem-dot { width: 7px; height: 7px; }
-.overlay-controls.wide .mini-stems .btn { padding: 1px 5px; font-size: 9px; }
 .overlay-controls.wide .overlay-rail {
   flex: 1 1 auto; display: flex; flex-direction: row; gap: 10px; min-width: 0;
 }
