@@ -23,9 +23,10 @@ from .separation import process_track
 class Job:
     id: str
     state: str = "queued"  # queued | processing | done | error
-    stage: str = ""        # extracting | separating | mixing | encoding | analysing
+    stage: str = ""        # preparing | extracting | separating | mixing | encoding | analysing
     progress: float = 0.0  # 0..1
     track_id: Optional[str] = None
+    video_ready: bool = False  # video transcoded & viewable (stems may still be processing)
     error: Optional[str] = None
 
     def public(self) -> dict:
@@ -95,16 +96,22 @@ class JobManager:
             job_id, video_path = self._queue.get()
             track_id = job_id  # one track per job
             try:
-                self._update(job_id, state="processing", stage="extracting")
+                self._update(job_id, state="processing", stage="preparing")
 
                 def progress(stage: str, frac: float) -> None:
                     self._update(job_id, stage=stage, progress=frac)
+
+                def on_video_ready(_dur: float) -> None:
+                    # Video is transcoded & viewable; expose the track id now so
+                    # the frontend can show it while stems keep separating.
+                    self._update(job_id, video_ready=True, track_id=track_id)
 
                 process_track(
                     video_path,
                     str(self.data_dir / track_id),
                     track_id,
                     progress,
+                    on_video_ready=on_video_ready,
                 )
                 self._update(
                     job_id, state="done", stage="", progress=1.0, track_id=track_id

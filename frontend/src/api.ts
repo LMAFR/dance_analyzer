@@ -6,6 +6,7 @@ export interface JobStatus {
   stage: string;
   progress: number;
   track_id: string | null;
+  video_ready: boolean;
   error: string | null;
 }
 
@@ -14,7 +15,8 @@ export interface Manifest {
   duration: number;
   video: string;
   stems: { id: string; url: string }[];
-  envelopes: string;
+  envelopes: string | null;
+  ready: boolean;
 }
 
 export interface EnvelopeDoc {
