@@ -56,6 +56,7 @@ export function Player({ videoUrl, stems }: PlayerProps) {
 
   const [ready, setReady] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -78,21 +79,29 @@ export function Player({ videoUrl, stems }: PlayerProps) {
     if (!video) return;
     setReady(false);
     setVideoReady(false);
+    setLoadError(null);
+    let disposed = false;
     const engine = new AudioEngine(video);
     engineRef.current = engine;
     const sources: StemSource[] = stems.map((s) => ({ id: s.id, url: s.url }));
     engine
       .load(sources)
       .then(() => {
+        if (disposed) return; // engine was torn down during load
         setDuration(engine.duration);
         const env: Record<string, number[]> = {};
         for (const s of stems) env[s.id] = s.envelope ?? engine.envelope(s.id, ENVELOPE_POINTS);
         setEnvelopes(env);
         setReady(true);
       })
-      .catch((e) => console.error('engine load failed', e));
+      .catch((e) => {
+        if (disposed) return;
+        console.error('engine load failed', e);
+        setLoadError(e instanceof Error ? e.message : String(e));
+      });
     engine.onTick = (t) => setTime(t);
     return () => {
+      disposed = true;
       engine.onTick = null;
       engine.dispose();
       engineRef.current = null;
@@ -368,6 +377,10 @@ export function Player({ videoUrl, stems }: PlayerProps) {
             }}
             onLoadedData={() => setVideoReady(true)}
             onCanPlay={() => setVideoReady(true)}
+            onError={() => {
+              const err = videoRef.current?.error;
+              setLoadError(`Video failed to load${err ? ` (code ${err.code})` : ''}`);
+            }}
           />
           {swapped && (
             <button className="maximize-btn video-max" onPointerDown={(e) => e.stopPropagation()}
@@ -378,7 +391,11 @@ export function Player({ videoUrl, stems }: PlayerProps) {
           {pipActive && <div className="pip-resize" onPointerDown={onResizeDown} title="Drag to resize" />}
         </div>
 
-        {loading && (
+        {loadError ? (
+          <div className="spinner-overlay error">
+            <span>⚠ {loadError}</span>
+          </div>
+        ) : loading && (
           <div className="spinner-overlay">
             <div className="spinner" />
             <span>{!ready ? 'Loading stems…' : 'Loading video…'}</span>
