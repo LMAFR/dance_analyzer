@@ -124,6 +124,13 @@ Conclusions:
   upload (WebCodecs / ffmpeg.wasm) — cuts transfer *and* transcode time, but it's
   a sizable feature; deferred.
 
+## TODO / known limitations
+
+- **Pitch shifts with playback speed.** Speed control uses Web Audio
+  `playbackRate` on the stems, so 0.5×/2× also shift the pitch. Pitch-preserved
+  slow-mo would need time-stretching (e.g. an `AudioWorklet`/phase-vocoder or a
+  library like SoundTouch) — deferred.
+
 ## Notes
 
 - Uploads are validated (type, size, duration) and transcoded to

@@ -75,6 +75,7 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
 
   const [ready, setReady] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
+  const [buffering, setBuffering] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
@@ -132,10 +133,12 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
       });
     engine.onTick = (t) => setTime(t);
     engine.onEnded = () => setPlaying(false); // reset transport to ▶ at end
+    engine.onBuffering = (b) => setBuffering(b);
     return () => {
       disposed = true;
       engine.onTick = null;
       engine.onEnded = null;
+      engine.onBuffering = null;
       engine.dispose();
       engineRef.current = null;
     };
@@ -577,7 +580,7 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
           onPointerUp={pipActive ? onPipPointerUp : undefined}
         >
           <video
-            ref={videoRef} src={videoUrl} className="video" playsInline
+            ref={videoRef} src={videoUrl} className="video" playsInline preload="auto"
             onLoadedMetadata={(e) => {
               const v = e.currentTarget;
               if (v.videoWidth && v.videoHeight) setVideoAspect(v.videoWidth / v.videoHeight);
@@ -589,6 +592,9 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
               setLoadError(`Video failed to load${err ? ` (code ${err.code})` : ''}`);
             }}
           />
+          {buffering && (
+            <div className="buffering-overlay"><div className="spinner" /></div>
+          )}
           {swapped && (
             <button className="maximize-btn video-max" onPointerDown={(e) => e.stopPropagation()}
               onClick={maximizeVideo} title="Show the video in the main view">

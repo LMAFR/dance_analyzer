@@ -70,12 +70,45 @@ export class AudioEngine {
   /** Fired once when playback runs off the end of the media (auto-stop). */
   onEnded: (() => void) | null = null;
 
+  /** Fired when playback pauses to wait for the video (true) and resumes (false). */
+  onBuffering: ((buffering: boolean) => void) | null = null;
+
+  /** True while the audio is paused waiting for a stalled video to catch up. */
+  private buffering = false;
+  /** 'stall' = waiting for data (resume on 'playing'); 'lag' = video fell behind
+      (resume once it catches up by position). */
+  private bufferReason: 'stall' | 'lag' = 'stall';
+
   constructor(video: HTMLVideoElement, opts: AudioEngineOptions = {}) {
     this.video = video;
     this.opts = { ...DEFAULTS, ...opts };
     this.ctx = new AudioContext();
     // Video is visual-only; its own track is silenced.
     this.video.muted = true;
+    this.video.addEventListener('waiting', this.handleStall);
+    this.video.addEventListener('stalled', this.handleStall);
+    this.video.addEventListener('playing', this.handleResume);
+  }
+
+  // When the video stalls, suspend the audio clock so time/graphs wait for it.
+  private handleStall = () => { if (this.playing) this.enterBuffering('stall'); };
+  private handleResume = () => { this.exitBuffering(); };
+
+  private enterBuffering(reason: 'stall' | 'lag') {
+    if (this.buffering) return;
+    this.buffering = true;
+    this.bufferReason = reason;
+    this.ctx.suspend().catch(() => {}); // freezes ctx.currentTime -> media time
+    this.onBuffering?.(true);
+  }
+
+  private exitBuffering() {
+    if (!this.buffering) return;
+    this.buffering = false;
+    this.ctx.resume().catch(() => {});
+    this.video.currentTime = this.currentTime; // re-align to the audio clock
+    this.video.play().catch(() => {});
+    this.onBuffering?.(false);
   }
 
   /** Fetch + decode every stem and wire gain nodes. */
@@ -201,6 +234,7 @@ export class AudioEngine {
 
   pause() {
     if (!this.playing) return;
+    if (this.buffering) { this.buffering = false; this.ctx.resume().catch(() => {}); this.onBuffering?.(false); }
     const t = this.currentTime;
     this.stopSources();
     this.video.pause();
@@ -213,6 +247,7 @@ export class AudioEngine {
 
   /** Seek to an absolute media time (s). Works whether playing or paused. */
   seek(time: number) {
+    if (this.buffering) { this.buffering = false; this.ctx.resume().catch(() => {}); this.onBuffering?.(false); }
     const t = Math.max(0, Math.min(time, this.duration));
     if (this.playing) {
       this.stopSources();
@@ -255,6 +290,19 @@ export class AudioEngine {
 
   private loop = () => {
     if (!this.playing) return;
+
+    // Waiting for a stalled video: audio is suspended (so time/graphs are
+    // frozen too); resume once the video has caught up.
+    if (this.buffering) {
+      // A 'stall' waits for the video's 'playing' event; a 'lag' resumes once the
+      // video has caught up to the (frozen) audio position.
+      if (this.bufferReason === 'lag' && this.video.currentTime >= this.currentTime - 0.05) {
+        this.exitBuffering();
+      }
+      this.rafId = requestAnimationFrame(this.loop);
+      return;
+    }
+
     const audioTime = this.currentTime;
 
     // Loop region -> wrap back to the start when we reach the end.
@@ -275,11 +323,14 @@ export class AudioEngine {
     // Slave the video to the audio clock (nudging around the base playback rate).
     const drift = this.video.currentTime - audioTime; // +ve: video ahead
     const abs = Math.abs(drift);
-    if (abs > this.opts.hardDriftThreshold) {
-      this.video.currentTime = audioTime;
+    if (drift < -this.opts.hardDriftThreshold) {
+      // Video has fallen well behind and isn't keeping up -> pause and wait for it
+      // (instead of seizing forward and freezing), keeping audio/graphs in sync.
+      this.enterBuffering('lag');
+    } else if (drift > this.opts.hardDriftThreshold) {
+      this.video.currentTime = audioTime; // video ahead (rare) -> snap back
       this.video.playbackRate = this._rate;
     } else if (abs > this.opts.softDriftThreshold) {
-      // Nudge: if video is behind, speed it up slightly, and vice versa.
       this.video.playbackRate = this._rate * (1 - drift * this.opts.correctionGain);
     } else {
       this.video.playbackRate = this._rate;
@@ -311,6 +362,9 @@ export class AudioEngine {
 
   dispose() {
     this.disposed = true;
+    this.video.removeEventListener('waiting', this.handleStall);
+    this.video.removeEventListener('stalled', this.handleStall);
+    this.video.removeEventListener('playing', this.handleResume);
     if (this.rafId !== null) cancelAnimationFrame(this.rafId);
     this.stopSources();
     this.ctx.close();
