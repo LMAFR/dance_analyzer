@@ -130,6 +130,12 @@ Conclusions:
   `playbackRate` on the stems, so 0.5×/2× also shift the pitch. Pitch-preserved
   slow-mo would need time-stretching (e.g. an `AudioWorklet`/phase-vocoder or a
   library like SoundTouch) — deferred.
+- **Landscape mobile layout not done.** The phone UI is tuned for portrait; for
+  now landscape is blocked with a "rotate to portrait" overlay. TODO: design a
+  proper landscape phone layout and drop the overlay.
+- **Landscape source videos untested.** Only portrait clips have been tried.
+  TODO: verify the player, PiP, fullscreen (cover-fit), and aspect handling with
+  landscape (wide) videos, primarily on desktop.
 
 ## Notes
 
