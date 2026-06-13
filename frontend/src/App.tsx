@@ -102,6 +102,12 @@ export default function App() {
 
   return (
     <div className="app">
+      {/* Phones: the UI is tuned for portrait — block landscape with a prompt. */}
+      <div className="rotate-overlay">
+        <div className="rotate-icon">⟳</div>
+        <p>Please rotate your device to portrait.</p>
+      </div>
+
       <header className="topbar">
         <h1>DancersDeck</h1>
         {trackId ? (

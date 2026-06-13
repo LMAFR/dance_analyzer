@@ -45,3 +45,25 @@
 .status.error {
   color: #ff6b6b;
 }
+
+/* Rotate-to-portrait gate (phones in landscape only; max-height keeps desktops
+   in landscape unaffected). */
+.rotate-overlay { display: none; }
+@media (orientation: landscape) and (max-height: 560px) {
+  .rotate-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 24px;
+    text-align: center;
+    background: #0b0e14;
+    color: #cfd6e4;
+    font-size: 15px;
+  }
+  .rotate-icon { font-size: 44px; }
+}
