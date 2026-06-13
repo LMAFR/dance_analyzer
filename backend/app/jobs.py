@@ -9,7 +9,7 @@ from __future__ import annotations
 import threading
 import traceback
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from pathlib import Path
 from queue import Queue
 from typing import Optional
@@ -80,4 +80,6 @@ class JobManager:
                 traceback.print_exc()
                 self._update(job_id, state="error", error=str(e))
             finally:
+                # The upload was streamed to a temp file; drop it once processed.
+                Path(video_path).unlink(missing_ok=True)
                 self._queue.task_done()

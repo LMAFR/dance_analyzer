@@ -78,14 +78,33 @@ backend/
   app/envelope.py                    RMS intensity envelope
 ```
 
+## Deploy (Docker)
+
+The whole stack runs via `docker-compose`:
+- **backend** — FastAPI + Demucs (CPU); processed tracks persist in a named volume.
+- **web** — Caddy serving the built frontend and proxying `/api` → backend.
+
+```bash
+cp .env.example .env        # adjust limits / port / domain
+docker-compose up -d --build
+```
+
+By default the site is served as **plain HTTP on `HTTP_PORT` (8090)** — put that
+behind your existing reverse proxy. For **standalone HTTPS**, set
+`SITE_ADDRESS=your.domain` in `.env`, uncomment the `443:443` line in
+`docker-compose.yml`, and Caddy fetches a Let's Encrypt cert automatically.
+
+Backend env vars (also settable in `.env`): `MAX_MB` (upload size, default 200),
+`MAX_SECS` (max duration, default 600), `ALLOWED_ORIGINS`, `DANCERSDECK_DATA_DIR`.
+
+The backend image bakes in the htdemucs weights, so the first separation is fast.
+
 ## Notes
 
-- Uploads are transcoded to **H.264 / 8-bit yuv420p** so phone HEVC clips play in
-  the browser.
+- Uploads are validated (type, size, duration) and transcoded to
+  **H.264 / 8-bit yuv420p** so phone HEVC clips play in the browser.
 - Stem mapping: Demucs `htdemucs` → percussion=`drums`, voice=`vocals`,
   instrumental=`bass`+`other`.
-
-## Roadmap
-
-Upload size/length validation, error states, and a Dockerized worker for VPS
-deployment (Milestone 6).
+- The job queue is a single in-process worker (one separation at a time). Jobs
+  are in-memory, so a backend restart loses in-flight jobs; completed tracks
+  persist on disk.

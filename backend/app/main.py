@@ -4,11 +4,18 @@ POST /api/uploads        -> {job_id}      (enqueue separation)
 GET  /api/jobs/{id}      -> job status    (poll for progress)
 GET  /api/tracks/{id}    -> manifest.json
 GET  /api/tracks/{id}/{file} -> static media (video, stems, envelopes)
+
+Configuration (env vars):
+  DANCERSDECK_DATA_DIR   where processed tracks are written (default: ../data)
+  DANCERSDECK_MAX_MB     max upload size in MB (default: 200)
+  DANCERSDECK_MAX_SECS   max video duration in seconds (default: 600)
+  ALLOWED_ORIGINS        comma-separated CORS origins (default: *)
 """
 from __future__ import annotations
 
 import json
-import shutil
+import os
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -18,19 +25,36 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from .jobs import JobManager
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-MAX_BYTES = 200 * 1024 * 1024  # 200 MB cap (plan v1 limit)
+DATA_DIR = Path(
+    os.environ.get("DANCERSDECK_DATA_DIR", str(Path(__file__).resolve().parent.parent / "data"))
+)
+MAX_BYTES = int(os.environ.get("DANCERSDECK_MAX_MB", "200")) * 1024 * 1024
+MAX_DURATION = float(os.environ.get("DANCERSDECK_MAX_SECS", "600"))  # 10 min
+ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
 ALLOWED_SUFFIXES = {".mp4", ".mov", ".webm", ".mkv", ".m4v", ".avi"}
 
 app = FastAPI(title="DancersDeck")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten before VPS deploy
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 jobs = JobManager(DATA_DIR)
+
+
+def _probe_duration(path: str) -> float | None:
+    """Return the video duration in seconds, or None if it can't be read."""
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=nw=1:nk=1", path],
+            check=True, capture_output=True, text=True,
+        )
+        return float(out.stdout.strip())
+    except (subprocess.CalledProcessError, ValueError):
+        return None
 
 
 @app.post("/api/uploads")
@@ -48,10 +72,21 @@ async def upload(file: UploadFile = File(...)) -> JSONResponse:
             if size > MAX_BYTES:
                 tmp.close()
                 Path(tmp.name).unlink(missing_ok=True)
-                raise HTTPException(413, "File too large (max 200 MB)")
+                raise HTTPException(413, f"File too large (max {MAX_BYTES // (1024 * 1024)} MB)")
             tmp.write(chunk)
     finally:
         tmp.close()
+
+    # Reject anything that isn't a readable video, or that's too long.
+    duration = _probe_duration(tmp.name)
+    if duration is None:
+        Path(tmp.name).unlink(missing_ok=True)
+        raise HTTPException(400, "Could not read a video stream from that file")
+    if duration > MAX_DURATION:
+        Path(tmp.name).unlink(missing_ok=True)
+        raise HTTPException(
+            413, f"Video too long ({duration:.0f}s; max {MAX_DURATION:.0f}s)"
+        )
 
     job_id = jobs.submit(tmp.name)
     return JSONResponse({"job_id": job_id})
