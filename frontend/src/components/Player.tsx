@@ -160,10 +160,11 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
       // Bigger by default on phones (12% is unusably small there).
       const frac = isMobile ? 0.42 : 0.12;
       const w = Math.round(window.innerWidth * frac);
-      // Sit lower and further left (more inset on phones) so it clears each
-      // graph's top-right expand/mute buttons.
-      const margin = Math.round(window.innerWidth * (isMobile ? 0.16 : 0.07));
-      setPip({ x: window.innerWidth - w - margin, y: Math.round(window.innerHeight * 0.12), w });
+      // Phones: centre it over the graphs (clears both the top-left labels and
+      // top-right buttons). Desktop: tuck it into the top-right.
+      const margin = Math.round(window.innerWidth * 0.07);
+      const x = isMobile ? Math.round((window.innerWidth - w) / 2) : window.innerWidth - w - margin;
+      setPip({ x, y: Math.round(window.innerHeight * 0.12), w });
     }
     if (!pipActive && pip) setPip(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps

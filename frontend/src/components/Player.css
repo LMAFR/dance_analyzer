@@ -231,9 +231,13 @@
   .overlay-controls.wide .bp-measure { flex: 1 1 100%; max-width: none; }
   .overlay-controls.wide .beatgrid { max-height: 26vh; overflow: auto; }
 
-  /* Fullscreen video-in-main: beat-grid is a full-width bar at the bottom
-     (above the transport), not a small box floating over the dancers. */
+  /* Fullscreen video-in-main on phones:
+     - crop the video's black bands (fill the area), and
+     - reserve the bottom of the screen so the beat-grid sits BELOW the video
+       (not overlapping it), with the transport beneath that. */
+  .stage.fs .video { object-fit: cover; }
+  .stage.fs .video-holder { bottom: 26vh; }
   .stage.fs .overlay-controls { left: 8px; right: 8px; bottom: 84px; max-width: none; }
   .stage.fs .overlay-controls .bp-measure { flex: 1 1 100%; }
-  .stage.fs .overlay-controls .beatgrid { width: 100%; max-height: 30vh; overflow: auto; }
+  .stage.fs .overlay-controls .beatgrid { width: 100%; max-height: 16vh; overflow: auto; }
 }
