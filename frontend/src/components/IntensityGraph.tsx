@@ -61,7 +61,10 @@ export function IntensityGraph({
 }: IntensityGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragStart = useRef<number | null>(null);
-  const [dragPx, setDragPx] = useState<{ a: number; b: number } | null>(null);
+  // Loop selection is tracked in TIME (so it survives panning); drawn via xOfTime.
+  const [dragSel, setDragSel] = useState<{ start: number; end: number } | null>(null);
+  const dragStartTime = useRef<number>(0);
+  const selRef = useRef<{ start: number; end: number } | null>(null);
   const [hoverPx, setHoverPx] = useState<number | null>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
   const [settled, setSettled] = useState(false);
@@ -71,6 +74,10 @@ export function IntensityGraph({
   const wasGesture = useRef(false);
   const panLast = useRef<number | null>(null); // single-finger pan (when zoomed)
   const didPan = useRef(false);
+  // Current window mirror (for the edge auto-pan rAF) + auto-pan handle.
+  const viewRef = useRef({ start: 0, end: 0, w: 0 });
+  const fingerX = useRef(0);
+  const autoPan = useRef<{ dir: number; raf: number } | null>(null);
 
   // Redraw sharply whenever the canvas is resized (avoids the blurry-then-sharp race).
   useEffect(() => {
@@ -86,6 +93,9 @@ export function IntensityGraph({
 
   // Mark unsettled when the target height changes (mask the resize with a spinner).
   useEffect(() => { setSettled(false); }, [height]);
+
+  // Stop any edge auto-pan when the graph unmounts.
+  useEffect(() => () => { if (autoPan.current) cancelAnimationFrame(autoPan.current.raf); }, []);
 
   const winStart = tStart ?? 0;
   const winEnd = tEnd ?? duration;
@@ -109,6 +119,7 @@ export function IntensityGraph({
     const span = winEnd - winStart || 1;
     const xOfTime = (t: number) => ((t - winStart) / span) * w;
     const yOf = (v: number) => h - v * (h - 6) - 3;
+    viewRef.current = { start: winStart, end: winEnd, w }; // for the auto-pan rAF
 
     // Overlay graphs (over the fullscreen video) stay mostly see-through so the
     // video is easy to watch behind them; the playhead below remains crisp.
@@ -188,10 +199,10 @@ export function IntensityGraph({
       ctx.globalAlpha = 1;
     }
 
-    // Drag selection preview.
-    if (dragPx) {
-      const a = Math.min(dragPx.a, dragPx.b);
-      const b = Math.max(dragPx.a, dragPx.b);
+    // Loop selection preview (time-based, so it stays put while panning).
+    if (dragSel) {
+      const a = xOfTime(Math.min(dragSel.start, dragSel.end));
+      const b = xOfTime(Math.max(dragSel.start, dragSel.end));
       ctx.fillStyle = 'rgba(79,157,255,0.22)';
       ctx.fillRect(a, 0, b - a, h);
     }
@@ -226,7 +237,7 @@ export function IntensityGraph({
     if (box.w > 0 && Math.abs(box.w - w) < 1.5 && Math.abs(box.h - h) < 1.5) {
       if (!settled) requestAnimationFrame(() => setSettled(true));
     }
-  }, [envelope, currentTime, duration, label, color, active, overlay, markers, loopRegion, dragPx, hoverPx, pickMode, winStart, winEnd, box, settled, height]);
+  }, [envelope, currentTime, duration, label, color, active, overlay, markers, loopRegion, dragSel, hoverPx, pickMode, winStart, winEnd, box, settled, height]);
 
   const timeAtX = (clientX: number, rect: DOMRect) => {
     const frac = clamp((clientX - rect.left) / rect.width, 0, 1);
@@ -239,24 +250,55 @@ export function IntensityGraph({
     return { dist: Math.abs(xs[0] - xs[1]) || 1, mid: (xs[0] + xs[1]) / 2 };
   };
 
+  // --- Edge auto-pan: while loop-dragging a zoomed graph and the finger sits near
+  //     a side, keep scrolling time that way (until the finger leaves the edge or
+  //     we hit the real start/end). ---
+  const EDGE_PX = 28;
+  const EDGE_SPEED = 0.025; // fraction of the window panned per frame
+  const stopAutoPan = () => {
+    if (autoPan.current) { cancelAnimationFrame(autoPan.current.raf); autoPan.current = null; }
+  };
+  const startAutoPan = (dir: number) => {
+    if (autoPan.current?.dir === dir) return;
+    stopAutoPan();
+    const tick = () => {
+      const { start, end, w } = viewRef.current;
+      const span = end - start;
+      if (span <= 0 || !onViewChange) { stopAutoPan(); return; }
+      if ((dir > 0 && end >= duration - 0.001) || (dir < 0 && start <= 0.001)) { stopAutoPan(); return; }
+      const dt = dir * span * EDGE_SPEED;
+      onViewChange(start + dt, end + dt);
+      const ns = clamp(start + dt, 0, Math.max(0, duration - span));
+      const selEnd = ns + clamp(fingerX.current / (w || 1), 0, 1) * span;
+      selRef.current = { start: dragStartTime.current, end: selEnd };
+      setDragSel(selRef.current);
+      autoPan.current = { dir, raf: requestAnimationFrame(tick) };
+    };
+    autoPan.current = { dir, raf: requestAnimationFrame(tick) };
+  };
+
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (duration <= 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
     pointers.current.set(e.pointerId, e.clientX);
     e.currentTarget.setPointerCapture(e.pointerId);
     if (pointers.current.size === 2) {
-      // Enter pinch/pan; cancel any single-finger drag-select.
       wasGesture.current = true;
       dragStart.current = null;
-      setDragPx(null);
+      setDragSel(null); selRef.current = null; stopAutoPan();
       pinch.current = pinchState(rect);
       return;
     }
     const x = e.clientX - rect.left;
     dragStart.current = x;
     panLast.current = x;
+    fingerX.current = x;
     didPan.current = false;
-    if (onSelectRegion) setDragPx({ a: x, b: x });
+    if (onSelectRegion) {
+      dragStartTime.current = winStart + clamp(x / rect.width, 0, 1) * (winEnd - winStart);
+      selRef.current = { start: dragStartTime.current, end: dragStartTime.current };
+      setDragSel(selRef.current);
+    }
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -268,7 +310,6 @@ export function IntensityGraph({
       const span = winEnd - winStart;
       const next = pinchState(rect);
       const factor = pinch.current.dist / next.dist; // fingers apart -> zoom in
-      // Pan so content follows the fingers' midpoint, then zoom about the new mid.
       const panned = winStart - ((next.mid - pinch.current.mid) / w) * span;
       const center = panned + (next.mid / w) * span;
       const newSpan = span * factor;
@@ -279,15 +320,14 @@ export function IntensityGraph({
     }
 
     const x = e.clientX - rect.left;
+    fingerX.current = x;
     setHoverPx(x);
 
-    // Single-finger lateral pan while zoomed in (when looping is off, so a drag
-    // isn't already claimed for loop selection).
     const span = winEnd - winStart;
-    if (
-      dragStart.current !== null && onViewChange && !onSelectRegion &&
-      panLast.current !== null && span < duration - 0.05
-    ) {
+    const zoomed = span < duration - 0.05;
+
+    // Single-finger lateral pan while zoomed (only when looping is off).
+    if (dragStart.current !== null && onViewChange && !onSelectRegion && panLast.current !== null && zoomed) {
       const delta = x - panLast.current;
       if (delta !== 0) {
         const dt = -(delta / rect.width) * span;
@@ -298,37 +338,47 @@ export function IntensityGraph({
       return;
     }
 
-    if (dragStart.current !== null && onSelectRegion) setDragPx({ a: dragStart.current, b: x });
+    // Loop selection (looping on): track in time, and auto-pan at the edges.
+    if (dragStart.current !== null && onSelectRegion) {
+      const selEnd = winStart + clamp(x / rect.width, 0, 1) * span;
+      selRef.current = { start: dragStartTime.current, end: selEnd };
+      setDragSel(selRef.current);
+      if (zoomed) {
+        if (x > rect.width - EDGE_PX) startAutoPan(1);
+        else if (x < EDGE_PX) startAutoPan(-1);
+        else stopAutoPan();
+      }
+    }
   };
 
   const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     pointers.current.delete(e.pointerId);
     if (pointers.current.size < 2) pinch.current = null;
+    stopAutoPan();
 
     if (dragStart.current === null) {
-      // Don't treat lifting a pinch finger as a click.
       if (pointers.current.size === 0) wasGesture.current = false;
       return;
     }
     const x0 = dragStart.current;
     const x1 = e.clientX - rect.left;
+    const sel = selRef.current;
     dragStart.current = null;
     panLast.current = null;
-    setDragPx(null);
+    setDragSel(null);
+    selRef.current = null;
     if (wasGesture.current) { wasGesture.current = false; return; }
-    if (didPan.current) { didPan.current = false; return; } // panned -> not a tap/loop
+    if (didPan.current) { didPan.current = false; return; }
 
-    if (Math.abs(x1 - x0) < DRAG_PX) {
+    const bigSel = sel && Math.abs(sel.end - sel.start) > 0.06;
+    if (Math.abs(x1 - x0) < DRAG_PX && !bigSel) {
       // A tap seeks (or sets the beat anchor in pick mode).
       const t = timeAtX(e.clientX, rect);
       if (pickMode) onPick?.(t);
       else onSeek?.(t);
-    } else if (onSelectRegion) {
-      // A drag selects a loop region (only when looping is enabled).
-      const ta = timeAtX(rect.left + Math.min(x0, x1), rect);
-      const tb = timeAtX(rect.left + Math.max(x0, x1), rect);
-      onSelectRegion(ta, tb);
+    } else if (onSelectRegion && sel) {
+      onSelectRegion(Math.min(sel.start, sel.end), Math.max(sel.start, sel.end));
     }
     // Otherwise (drag with looping off): inspect only — don't move the playhead.
   };

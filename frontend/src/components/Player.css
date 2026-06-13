@@ -200,8 +200,9 @@
     grid-template-columns: 1fr;
     grid-template-areas: "main" "vid" "rail" "opts" "trans";
   }
-  .area-video.stage:not(.fs) { height: auto; width: 100%; max-height: 60vh; }
-  .player.swapped .area-video.stage:not(.fs) { height: auto; max-height: 40vh; }
+  /* No max-height cap: the stage matches the video's aspect exactly, so a
+     portrait clip fills width with no black side bands. Rounder corners too. */
+  .area-video.stage:not(.fs) { height: auto; width: 100%; border-radius: 16px; }
   /* On phones a lone featured graph wrapped to 3 tall rows is overkill. */
   .player.swapped .graphs { gap: 10px; }
 }
@@ -217,6 +218,7 @@
   .btn { padding: 6px 10px; }            /* larger tap targets */
   .btn.play { min-width: 44px; }
   .maximize-btn, .gbtn { width: 30px; height: 30px; opacity: 0.85; }
+  .video-holder.pip { border-radius: 14px; }
   /* Fullscreen transport wraps too (scrubber on its own row) so the time is fully visible. */
   .stage.fs .transport { flex-wrap: wrap; }
 
