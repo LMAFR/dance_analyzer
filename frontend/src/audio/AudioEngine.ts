@@ -73,11 +73,10 @@ export class AudioEngine {
   /** Fired when playback pauses to wait for the video (true) and resumes (false). */
   onBuffering: ((buffering: boolean) => void) | null = null;
 
-  /** True while the audio is paused waiting for a stalled video to catch up. */
+  /** True while the audio is paused waiting for a stalled video. Driven purely by
+      the video's 'waiting'/'playing' events (the browser debounces those), so it
+      doesn't oscillate per-frame. */
   private buffering = false;
-  /** 'stall' = waiting for data (resume on 'playing'); 'lag' = video fell behind
-      (resume once it catches up by position). */
-  private bufferReason: 'stall' | 'lag' = 'stall';
 
   constructor(video: HTMLVideoElement, opts: AudioEngineOptions = {}) {
     this.video = video;
@@ -91,13 +90,12 @@ export class AudioEngine {
   }
 
   // When the video stalls, suspend the audio clock so time/graphs wait for it.
-  private handleStall = () => { if (this.playing) this.enterBuffering('stall'); };
+  private handleStall = () => { if (this.playing) this.enterBuffering(); };
   private handleResume = () => { this.exitBuffering(); };
 
-  private enterBuffering(reason: 'stall' | 'lag') {
+  private enterBuffering() {
     if (this.buffering) return;
     this.buffering = true;
-    this.bufferReason = reason;
     this.ctx.suspend().catch(() => {}); // freezes ctx.currentTime -> media time
     this.onBuffering?.(true);
   }
@@ -105,9 +103,9 @@ export class AudioEngine {
   private exitBuffering() {
     if (!this.buffering) return;
     this.buffering = false;
+    // No re-seek here: the video resumes where it stalled (≈ the frozen audio
+    // position) and the normal drift-nudge re-aligns it — avoids a visible blink.
     this.ctx.resume().catch(() => {});
-    this.video.currentTime = this.currentTime; // re-align to the audio clock
-    this.video.play().catch(() => {});
     this.onBuffering?.(false);
   }
 
@@ -294,11 +292,7 @@ export class AudioEngine {
     // Waiting for a stalled video: audio is suspended (so time/graphs are
     // frozen too); resume once the video has caught up.
     if (this.buffering) {
-      // A 'stall' waits for the video's 'playing' event; a 'lag' resumes once the
-      // video has caught up to the (frozen) audio position.
-      if (this.bufferReason === 'lag' && this.video.currentTime >= this.currentTime - 0.05) {
-        this.exitBuffering();
-      }
+      // Audio is suspended; just wait for the video's 'playing' event to resume.
       this.rafId = requestAnimationFrame(this.loop);
       return;
     }
@@ -321,16 +315,14 @@ export class AudioEngine {
     }
 
     // Slave the video to the audio clock (nudging around the base playback rate).
+    // Real stalls are handled by the 'waiting'/'playing' events, not here.
     const drift = this.video.currentTime - audioTime; // +ve: video ahead
     const abs = Math.abs(drift);
-    if (drift < -this.opts.hardDriftThreshold) {
-      // Video has fallen well behind and isn't keeping up -> pause and wait for it
-      // (instead of seizing forward and freezing), keeping audio/graphs in sync.
-      this.enterBuffering('lag');
-    } else if (drift > this.opts.hardDriftThreshold) {
-      this.video.currentTime = audioTime; // video ahead (rare) -> snap back
+    if (drift > this.opts.hardDriftThreshold) {
+      this.video.currentTime = audioTime; // video ran ahead (rare) -> snap back
       this.video.playbackRate = this._rate;
     } else if (abs > this.opts.softDriftThreshold) {
+      // Nudge: video a bit behind -> speed up slightly to catch up, and vice versa.
       this.video.playbackRate = this._rate * (1 - drift * this.opts.correctionGain);
     } else {
       this.video.playbackRate = this._rate;

@@ -93,6 +93,7 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [rate, setRate] = useState(1);
   const menuRef = useRef<HTMLDivElement>(null);
+  const bufHideTimer = useRef<number | null>(null);
   const [view, setView] = useState<{ start: number; end: number } | null>(null); // zoom/pan window
   // Drag-to-loop is opt-in (off by default on phones, so a drag doesn't make a
   // loop and single-finger drag stays free; two-finger pinch still zooms).
@@ -133,7 +134,13 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
       });
     engine.onTick = (t) => setTime(t);
     engine.onEnded = () => setPlaying(false); // reset transport to ▶ at end
-    engine.onBuffering = (b) => setBuffering(b);
+    engine.onBuffering = (b) => {
+      // Keep the spinner steady across brief flickers: show immediately, hide
+      // only after it's been clear for a moment.
+      if (bufHideTimer.current) { clearTimeout(bufHideTimer.current); bufHideTimer.current = null; }
+      if (b) setBuffering(true);
+      else bufHideTimer.current = window.setTimeout(() => setBuffering(false), 250);
+    };
     return () => {
       disposed = true;
       engine.onTick = null;
