@@ -435,7 +435,6 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   const beatPanel = (
     <BeatGridPanel
       cfg={beatCfg} onChange={setBeatCfg} pickMode={pickMode} setPickMode={setPickMode}
-      loopRegion={loopRegion} onClearLoop={clearLoop}
     />
   );
 
@@ -462,22 +461,14 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
         value={time} onChange={(e) => seek(Number(e.target.value))} />
       <button
         className={loopEnabled ? 'btn active' : 'btn'}
-        onClick={() => setLoopEnabled((v) => !v)}
-        title={loopEnabled ? 'Loop-drag on — drag a graph to loop a section' : 'Loop-drag off — drag does not create loops'}
+        onClick={() => { if (loopEnabled) clearLoop(); setLoopEnabled((v) => !v); }}
+        title={loopEnabled
+          ? 'Looping on — drag a graph to loop a section; tap to turn off (clears the loop)'
+          : 'Looping off — tap to enable drag-to-loop'}
       >
         <span className="btn-icon"><LoopIcon /></span>
         <span className="btn-label">{loopEnabled ? 'Loop on' : 'Loop off'}</span>
       </button>
-      {loopRegion && (
-        <button className="btn loop-active" onClick={clearLoop} title="Clear the looped section">
-          <span className="loop-range">{fmtTime(loopRegion.start)}–{fmtTime(loopRegion.end)} </span>✕
-        </button>
-      )}
-      {view && (
-        <button className="btn" onClick={() => setView(null)} title="Reset zoom (fit all)">
-          <span className="btn-icon fit">FIT</span>
-        </button>
-      )}
       <button
         className="btn"
         onClick={onExport}
