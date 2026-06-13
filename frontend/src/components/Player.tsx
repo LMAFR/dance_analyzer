@@ -36,6 +36,13 @@ const MaximizeIcon = () => (
   </svg>
 );
 
+const LoopIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4Zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4Z" />
+  </svg>
+);
+
 const MuteIcon = ({ muted }: { muted: boolean }) => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -458,7 +465,7 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
         onClick={() => setLoopEnabled((v) => !v)}
         title={loopEnabled ? 'Loop-drag on — drag a graph to loop a section' : 'Loop-drag off — drag does not create loops'}
       >
-        <span className="btn-icon">🔁</span>
+        <span className="btn-icon"><LoopIcon /></span>
         <span className="btn-label">{loopEnabled ? 'Loop on' : 'Loop off'}</span>
       </button>
       {loopRegion && (

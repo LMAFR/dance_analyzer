@@ -141,7 +141,7 @@
 .btn-icon.fit { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; }
 .btn:hover { background: #232c3d; }
 .btn.active { background: #4f9dff; border-color: #4f9dff; color: #07101f; }
-.btn.play { font-size: 14px; min-width: 40px; }
+.btn.play { font-size: 14px; min-width: 40px; justify-content: center; gap: 0; }
 .btn.loop-active { background: #243449; border-color: #4f9dff; color: #cfe2ff; }
 .btn.tiny { padding: 3px 7px; font-size: 11px; }
 .btn:disabled { opacity: 0.5; cursor: default; }
