@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { AudioEngine, type StemSource } from '../audio/AudioEngine';
 import { IntensityGraph } from './IntensityGraph';
 import { BeatGridPanel, type PickMode } from './BeatGridPanel';
+import { VideoGuides } from './VideoGuides';
 import { computeStepMarkers, DEFAULT_BEATGRID, type BeatGridConfig } from '../beatgrid';
 import { fmtTime } from '../format';
 import { exportClip } from '../api';
@@ -633,6 +634,7 @@ export function Player({ trackId, videoUrl, poster, stems }: PlayerProps) {
             </button>
           )}
           {pipActive && <div className="pip-resize" onPointerDown={onResizeDown} title="Drag to resize" />}
+          {!pipActive && !loadError && <VideoGuides />}
         </div>
 
         {loadError ? (

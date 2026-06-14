@@ -93,6 +93,48 @@
 }
 .play-overlay svg { filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5)); transition: transform 0.12s; }
 .play-overlay:hover svg { transform: scale(1.06); }
+
+/* ---- Video tools overlay (gear button + draggable guide lines) ---- */
+/* The wrapper fills the video but is click-through; only its children catch events. */
+.video-guides { position: absolute; inset: 0; z-index: 4; pointer-events: none; overflow: hidden; }
+
+.guide-line { position: absolute; pointer-events: auto; touch-action: none; }
+.guide-line.v {
+  top: 0; bottom: 0; width: 20px; transform: translateX(-50%);
+  cursor: ew-resize; display: flex; justify-content: center;
+}
+.guide-line.v::before {
+  content: ''; width: 2px; height: 100%;
+  background: #ff5d5d; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+.guide-line.h {
+  left: 0; right: 0; height: 20px; transform: translateY(-50%);
+  cursor: ns-resize; display: flex; align-items: center;
+}
+.guide-line.h::before {
+  content: ''; height: 2px; width: 100%;
+  background: #4ad9ff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+.vtools {
+  position: absolute; right: 10px; bottom: 10px;
+  display: flex; flex-direction: column-reverse; align-items: center; gap: 8px;
+  pointer-events: none;
+}
+.vtools-toggle, .vtool {
+  pointer-events: auto; width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.35); color: #fff;
+  background: rgba(20, 24, 32, 0.32); cursor: pointer;
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+  transition: background 0.15s, opacity 0.15s, transform 0.12s;
+}
+.vtools-toggle { opacity: 0.45; }
+.vtools.open .vtools-toggle, .vtools-toggle:hover { opacity: 1; }
+.vtools.open .vtools-toggle { background: rgba(45, 130, 220, 0.55); transform: rotate(30deg); }
+.vtool:hover, .vtools-toggle:hover { background: rgba(40, 48, 64, 0.7); }
+.vtool:disabled { opacity: 0.35; cursor: default; }
+.vtools-actions { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Graphs */
