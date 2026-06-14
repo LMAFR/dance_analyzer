@@ -128,21 +128,20 @@
   border: 1.5px solid rgba(255, 255, 255, 0.9); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
 }
 /* Resize-only: a small, subtle dot centered in a large transparent touch area
-   (so it's easy to grab with a finger). The frame body stays click-through so
-   guide lines and play stay reachable inside the box. */
+   (so it's easy to grab with a finger). Positioned (left/top %) right on the corner
+   and pulled back 50% so the whole grip centers on it — and it lives in a NON-clipped
+   layer, so the outer half of the grip isn't cut off at the box edge. */
 .rh {
-  position: absolute; width: 30px; height: 30px; pointer-events: auto;
-  background: transparent; touch-action: none;
+  position: absolute; width: 38px; height: 38px; pointer-events: auto; z-index: 5;
+  transform: translate(-50%, -50%); background: transparent; touch-action: none;
   display: flex; align-items: center; justify-content: center;
 }
 .rh::before {
-  content: ''; width: 11px; height: 11px; border-radius: 50%;
-  background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+  content: ''; width: 12px; height: 12px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
 }
-.rh-nw { left: -15px; top: -15px; cursor: nwse-resize; }
-.rh-ne { right: -15px; top: -15px; cursor: nesw-resize; }
-.rh-sw { left: -15px; bottom: -15px; cursor: nesw-resize; }
-.rh-se { right: -15px; bottom: -15px; cursor: nwse-resize; }
+.rh-nw, .rh-se { cursor: nwse-resize; }
+.rh-ne, .rh-sw { cursor: nesw-resize; }
 
 .vtools {
   position: absolute; right: 10px; bottom: 10px;

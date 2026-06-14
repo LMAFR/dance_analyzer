@@ -19,6 +19,13 @@ type Handle = 'nw' | 'ne' | 'sw' | 'se';
 
 const MIN = 0.04; // smallest rectangle side (fraction)
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+// Corner -> its position within the box as (fx, fy) fractions (0 = left/top edge).
+const CORNERS: { h: Handle; fx: number; fy: number }[] = [
+  { h: 'nw', fx: 0, fy: 0 },
+  { h: 'ne', fx: 1, fy: 0 },
+  { h: 'sw', fx: 0, fy: 1 },
+  { h: 'se', fx: 1, fy: 1 },
+];
 
 const GearIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -182,19 +189,7 @@ export function VideoGuides() {
             <path d={maskPath(activeRect)} fill="#000" fillRule="evenodd" opacity="0.62" />
           </svg>
         )}
-        {activeRect && (
-          <div className="rect-frame" style={boxStyle(activeRect)}>
-            {editable && (['nw', 'ne', 'sw', 'se'] as const).map((h) => (
-              <span
-                key={h}
-                className={`rh rh-${h}`}
-                onPointerDown={(e) => onRectDown(e, h)}
-                onPointerMove={onRectMove}
-                onPointerUp={onRectUp}
-              />
-            ))}
-          </div>
-        )}
+        {activeRect && <div className="rect-frame" style={boxStyle(activeRect)} />}
 
         {lines.map((g) => (
           <div
@@ -216,6 +211,22 @@ export function VideoGuides() {
           />
         )}
       </div>
+
+      {/* Resize handles in a NON-clipped layer, centered on each corner, so the
+          whole grip is tappable (the clipped layer would cut the outer half off). */}
+      {editable && activeRect && CORNERS.map(({ h, fx, fy }) => {
+        const r = activeRect;
+        return (
+          <span
+            key={h}
+            className={`rh rh-${h}`}
+            style={{ left: `${(r.x + fx * r.w) * 100}%`, top: `${(r.y + fy * r.h) * 100}%` }}
+            onPointerDown={(e) => onRectDown(e, h)}
+            onPointerMove={onRectMove}
+            onPointerUp={onRectUp}
+          />
+        );
+      })}
 
       {/* stopPropagation so tapping/dragging the toolbar doesn't drag the PiP. */}
       <div className={`vtools ${open ? 'open' : ''}`} onPointerDown={(e) => e.stopPropagation()}>
