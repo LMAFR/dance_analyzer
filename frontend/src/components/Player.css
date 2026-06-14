@@ -142,6 +142,10 @@
 .video-holder.pip .vtools-toggle, .video-holder.pip .vtool { width: 28px; height: 28px; }
 .video-holder.pip .vtools-toggle svg { width: 16px; height: 16px; }
 .video-holder.pip .vtool svg { width: 15px; height: 15px; }
+/* Desktop fullscreen with the video in the main spot: the holder fills the screen
+   and the transport bar sits at bottom:0, so lift the gear above it (still bottom-
+   right of the video). */
+.stage.fs .video-holder:not(.pip) .vtools { bottom: 72px; right: 16px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Graphs */
