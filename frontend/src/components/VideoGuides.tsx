@@ -70,7 +70,7 @@ export function VideoGuides() {
   const idRef = useRef(1);
   const lineDrag = useRef<{ id: number; axis: 'v' | 'h' } | null>(null);
   const drawStart = useRef<{ x: number; y: number } | null>(null);
-  const rectDrag = useRef<{ mode: 'move' | Handle; sx: number; sy: number; r0: Box } | null>(null);
+  const rectDrag = useRef<{ mode: Handle; sx: number; sy: number; r0: Box } | null>(null);
 
   const rect = items.find((i): i is RectItem => i.kind === 'rect') ?? null;
   const lines = items.filter((i): i is Line => i.kind !== 'rect');
@@ -141,8 +141,9 @@ export function VideoGuides() {
     }
   };
 
-  // ---- move / resize the existing rectangle ----
-  const onRectDown = (e: ReactPointerEvent, mode: 'move' | Handle) => {
+  // ---- resize the existing rectangle (corner handles only; not draggable, so it
+  //      never competes with the guide lines) ----
+  const onRectDown = (e: ReactPointerEvent, mode: Handle) => {
     if (!rect) return;
     e.stopPropagation();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -155,23 +156,13 @@ export function VideoGuides() {
     const f = frac(e);
     const dx = f.x - m.sx, dy = f.y - m.sy;
     const r0 = m.r0;
-    let nb: Box;
-    if (m.mode === 'move') {
-      nb = {
-        ...r0,
-        x: Math.max(0, Math.min(r0.x + dx, 1 - r0.w)),
-        y: Math.max(0, Math.min(r0.y + dy, 1 - r0.h)),
-      };
-    } else {
-      let { x, y, w, h } = r0;
-      const right = r0.x + r0.w, bottom = r0.y + r0.h;
-      if (m.mode.includes('w')) { const nl = Math.max(0, Math.min(r0.x + dx, right - MIN)); x = nl; w = right - nl; }
-      if (m.mode.includes('e')) { const nr2 = Math.max(r0.x + MIN, Math.min(right + dx, 1)); w = nr2 - r0.x; }
-      if (m.mode.includes('n')) { const nt = Math.max(0, Math.min(r0.y + dy, bottom - MIN)); y = nt; h = bottom - nt; }
-      if (m.mode.includes('s')) { const nbm = Math.max(r0.y + MIN, Math.min(bottom + dy, 1)); h = nbm - r0.y; }
-      nb = { x, y, w, h };
-    }
-    setItems((s) => s.map((it) => (it.kind === 'rect' ? { ...it, ...nb } : it)));
+    let { x, y, w, h } = r0;
+    const right = r0.x + r0.w, bottom = r0.y + r0.h;
+    if (m.mode.includes('w')) { const nl = Math.max(0, Math.min(r0.x + dx, right - MIN)); x = nl; w = right - nl; }
+    if (m.mode.includes('e')) { const nr2 = Math.max(r0.x + MIN, Math.min(right + dx, 1)); w = nr2 - r0.x; }
+    if (m.mode.includes('n')) { const nt = Math.max(0, Math.min(r0.y + dy, bottom - MIN)); y = nt; h = bottom - nt; }
+    if (m.mode.includes('s')) { const nbm = Math.max(r0.y + MIN, Math.min(bottom + dy, 1)); h = nbm - r0.y; }
+    setItems((s) => s.map((it) => (it.kind === 'rect' ? { ...it, x, y, w, h } : it)));
   };
   const onRectUp = (e: ReactPointerEvent) => {
     rectDrag.current = null;
@@ -184,10 +175,25 @@ export function VideoGuides() {
   return (
     <div className="video-guides" ref={wrapRef}>
       <div className="guide-clip">
+        {/* Rectangle + darken mask sit below the lines so the lines are always on
+            top and stay grabbable, even where they cross the box. */}
         {activeRect && (
           <svg className="rect-mask" viewBox="0 0 100 100" preserveAspectRatio="none">
             <path d={maskPath(activeRect)} fill="#000" fillRule="evenodd" opacity="0.62" />
           </svg>
+        )}
+        {activeRect && (
+          <div className="rect-frame" style={boxStyle(activeRect)}>
+            {editable && (['nw', 'ne', 'sw', 'se'] as const).map((h) => (
+              <span
+                key={h}
+                className={`rh rh-${h}`}
+                onPointerDown={(e) => onRectDown(e, h)}
+                onPointerMove={onRectMove}
+                onPointerUp={onRectUp}
+              />
+            ))}
+          </div>
         )}
 
         {lines.map((g) => (
@@ -200,26 +206,6 @@ export function VideoGuides() {
             onPointerUp={onLineUp}
           />
         ))}
-
-        {activeRect && (
-          <div
-            className={`rect-frame ${editable ? 'editable' : ''}`}
-            style={boxStyle(activeRect)}
-            onPointerDown={editable ? (e) => onRectDown(e, 'move') : undefined}
-            onPointerMove={editable ? onRectMove : undefined}
-            onPointerUp={editable ? onRectUp : undefined}
-          >
-            {editable && (['nw', 'ne', 'sw', 'se'] as const).map((h) => (
-              <span
-                key={h}
-                className={`rh rh-${h}`}
-                onPointerDown={(e) => onRectDown(e, h)}
-                onPointerMove={onRectMove}
-                onPointerUp={onRectUp}
-              />
-            ))}
-          </div>
-        )}
 
         {drawing && (
           <div

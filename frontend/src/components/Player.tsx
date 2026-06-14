@@ -330,7 +330,7 @@ export function Player({ trackId, videoUrl, poster, stems }: PlayerProps) {
   // re-renders mid-drag (setPip fires every move), and a stuck capture swallows
   // every later click — freezing the whole UI. endGesture() always releases.
   const dragRef = useRef<{ dx: number; dy: number } | null>(null);
-  const resizeRef = useRef<{ sx: number; sw: number } | null>(null);
+  const resizeRef = useRef<{ sx: number; sw: number; sxpos: number } | null>(null);
   const capturedRef = useRef<{ el: HTMLElement; id: number } | null>(null);
 
   const capture = useCallback((el: HTMLElement, id: number) => {
@@ -365,8 +365,12 @@ export function Player({ trackId, videoUrl, poster, stems }: PlayerProps) {
   const onPipPointerMove = (e: React.PointerEvent) => {
     if (!pip) return;
     if (resizeRef.current) {
-      const w = Math.max(110, resizeRef.current.sw + (e.clientX - resizeRef.current.sx));
-      setPip({ ...pip, w });
+      // Grip is on the bottom-left, so keep the right edge fixed: dragging left
+      // widens the PiP (and shifts x left).
+      const r = resizeRef.current;
+      const right = r.sxpos + r.sw;
+      const w = Math.max(110, r.sw - (e.clientX - r.sx));
+      setPip({ ...pip, x: right - w, w });
     } else if (dragRef.current) {
       setPip({ ...pip, x: e.clientX - dragRef.current.dx, y: e.clientY - dragRef.current.dy });
     }
@@ -375,7 +379,7 @@ export function Player({ trackId, videoUrl, poster, stems }: PlayerProps) {
   const onResizeDown = (e: React.PointerEvent) => {
     if (!pip) return;
     e.stopPropagation();
-    resizeRef.current = { sx: e.clientX, sw: pip.w };
+    resizeRef.current = { sx: e.clientX, sw: pip.w, sxpos: pip.x };
     capture(e.currentTarget as HTMLElement, e.pointerId);
   };
 
@@ -623,7 +627,7 @@ export function Player({ trackId, videoUrl, poster, stems }: PlayerProps) {
             <div className="buffering-overlay"><div className="spinner" /></div>
           )}
           {ready && !playing && !buffering && !loadError && (
-            <button className="play-overlay" onClick={togglePlay} aria-label="Play">
+            <button className="play-overlay" onPointerDown={(e) => e.stopPropagation()} onClick={togglePlay} aria-label="Play">
               <PlayCircleIcon />
             </button>
           )}

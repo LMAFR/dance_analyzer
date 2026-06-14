@@ -62,9 +62,9 @@
    exactly and the resize handle stays on the video's bottom-right corner. */
 .video-holder.pip .video { height: 100%; }
 .pip-resize {
-  position: absolute; right: 0; bottom: 0; width: 20px; height: 20px;
-  cursor: nwse-resize; touch-action: none; z-index: 6;
-  background: linear-gradient(135deg, transparent 45%, rgba(255, 255, 255, 0.7) 45%, rgba(255, 255, 255, 0.7) 55%, transparent 55%);
+  position: absolute; left: 0; bottom: 0; width: 20px; height: 20px;
+  cursor: nesw-resize; touch-action: none; z-index: 6;
+  background: linear-gradient(45deg, transparent 45%, rgba(255, 255, 255, 0.7) 45%, rgba(255, 255, 255, 0.7) 55%, transparent 55%);
 }
 
 /* Spinner */
@@ -86,8 +86,10 @@
 
 /* Big tap-to-play button shown over the video when ready & paused. Sits below the
    PiP swap/resize controls (z 4/6) so those stay tappable. */
+/* Just the centered circle (not a full-cover button), so the rest of the video
+   stays draggable as a PiP and the guide tools underneath stay reachable. */
 .play-overlay {
-  position: absolute; inset: 0; z-index: 3;
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 3;
   display: flex; align-items: center; justify-content: center;
   background: none; border: none; padding: 0; cursor: pointer;
 }
@@ -123,17 +125,19 @@
 .draw-surface { position: absolute; inset: 0; pointer-events: auto; cursor: crosshair; touch-action: none; }
 .rect-frame {
   position: absolute; box-sizing: border-box; pointer-events: none;
-  border: 1.5px solid rgba(255, 255, 255, 0.95); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+  border: 1.5px solid rgba(255, 255, 255, 0.9); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
 }
-.rect-frame.editable { pointer-events: auto; cursor: move; touch-action: none; }
+/* Resize-only: small, subtle corner grips. The frame body stays click-through so
+   guide lines and play stay reachable inside the box. */
 .rh {
-  position: absolute; width: 14px; height: 14px; background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.55); border-radius: 2px; touch-action: none;
+  position: absolute; width: 9px; height: 9px; pointer-events: auto;
+  background: rgba(255, 255, 255, 0.85); border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4); touch-action: none;
 }
-.rh-nw { left: -7px; top: -7px; cursor: nwse-resize; }
-.rh-ne { right: -7px; top: -7px; cursor: nesw-resize; }
-.rh-sw { left: -7px; bottom: -7px; cursor: nesw-resize; }
-.rh-se { right: -7px; bottom: -7px; cursor: nwse-resize; }
+.rh-nw { left: -4.5px; top: -4.5px; cursor: nwse-resize; }
+.rh-ne { right: -4.5px; top: -4.5px; cursor: nesw-resize; }
+.rh-sw { left: -4.5px; bottom: -4.5px; cursor: nesw-resize; }
+.rh-se { right: -4.5px; bottom: -4.5px; cursor: nwse-resize; }
 
 .vtools {
   position: absolute; right: 10px; bottom: 10px;
@@ -155,9 +159,10 @@
 .vtool.active { background: rgba(45, 130, 220, 0.6); border-color: rgba(120, 180, 255, 0.8); }
 .vtool:disabled { opacity: 0.35; cursor: default; }
 .vtools-actions { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-/* On the floating PiP: move the gear to the bottom-left (the resize grip owns the
-   bottom-right) and shrink the buttons to suit the smaller video. */
-.video-holder.pip .vtools { left: 6px; right: auto; bottom: 6px; gap: 6px; }
+/* On the floating PiP: keep the gear in the bottom-right (consistent with every
+   other view) and just shrink the buttons to suit the smaller video. The resize
+   grip moves to the bottom-left instead (see .pip-resize). */
+.video-holder.pip .vtools { right: 6px; left: auto; bottom: 6px; gap: 6px; }
 .video-holder.pip .vtools-toggle, .video-holder.pip .vtool { width: 28px; height: 28px; }
 .video-holder.pip .vtools-toggle svg { width: 16px; height: 16px; }
 .video-holder.pip .vtool svg { width: 15px; height: 15px; }
