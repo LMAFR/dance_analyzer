@@ -40,6 +40,37 @@ const DEFAULTS: Required<AudioEngineOptions> = {
   correctionGain: 0.5,
 };
 
+// A tiny looping, inaudible <audio> element. Playing a real media element inside
+// the user's tap flips iOS's audio session to the "playback" category, which routes
+// Web Audio through the *media* channel — so our stems are no longer silenced by the
+// phone's ring/mute switch and the AudioContext reliably produces sound. (Web Audio
+// alone on iOS plays on the ringer channel and is muted by the hardware switch.)
+function makeSilentAudioUrl(): string {
+  const sampleRate = 8000;
+  const samples = 800; // 0.1 s
+  const buf = new ArrayBuffer(44 + samples);
+  const dv = new DataView(buf);
+  const writeStr = (off: number, s: string) => {
+    for (let i = 0; i < s.length; i++) dv.setUint8(off + i, s.charCodeAt(i));
+  };
+  writeStr(0, 'RIFF');
+  dv.setUint32(4, 36 + samples, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  dv.setUint32(16, 16, true);
+  dv.setUint16(20, 1, true); // PCM
+  dv.setUint16(22, 1, true); // mono
+  dv.setUint32(24, sampleRate, true);
+  dv.setUint32(28, sampleRate, true);
+  dv.setUint16(32, 1, true);
+  dv.setUint16(34, 8, true); // 8-bit
+  writeStr(36, 'data');
+  dv.setUint32(40, samples, true);
+  for (let i = 0; i < samples; i++) dv.setUint8(44 + i, 128); // 8-bit silence
+  const blob = new Blob([buf], { type: 'audio/wav' });
+  return URL.createObjectURL(blob);
+}
+
 export class AudioEngine {
   private ctx: AudioContext;
   private video: HTMLVideoElement;
@@ -78,6 +109,10 @@ export class AudioEngine {
       doesn't oscillate per-frame. */
   private buffering = false;
 
+  /** Inaudible looping element used to put iOS into the media audio session. */
+  private silentEl: HTMLAudioElement;
+  private audioUnlocked = false;
+
   constructor(video: HTMLVideoElement, opts: AudioEngineOptions = {}) {
     this.video = video;
     this.opts = { ...DEFAULTS, ...opts };
@@ -87,6 +122,29 @@ export class AudioEngine {
     this.video.addEventListener('waiting', this.handleStall);
     this.video.addEventListener('stalled', this.handleStall);
     this.video.addEventListener('playing', this.handleResume);
+
+    this.silentEl = document.createElement('audio');
+    this.silentEl.setAttribute('playsinline', '');
+    this.silentEl.loop = true;
+    this.silentEl.src = makeSilentAudioUrl();
+  }
+
+  /** Run inside the first play() gesture: route iOS audio through the media channel
+      and unlock the AudioContext with a 1-sample silent buffer. Cheap; idempotent. */
+  private unlockAudio() {
+    try {
+      const ns = navigator as unknown as { audioSession?: { type: string } };
+      if (ns.audioSession) ns.audioSession.type = 'playback';
+    } catch { /* not supported -> ignore */ }
+    // Keep the silent element looping while we play; it flips the audio session.
+    this.silentEl.play().catch(() => {});
+    if (this.audioUnlocked) return;
+    const buf = this.ctx.createBuffer(1, 1, 22050);
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(this.ctx.destination);
+    try { src.start(0); } catch { /* already started elsewhere */ }
+    this.audioUnlocked = true;
   }
 
   // When the video stalls, suspend the audio clock so time/graphs wait for it.
@@ -216,6 +274,8 @@ export class AudioEngine {
 
   play() {
     if (this.playing) return;
+    // First thing in the gesture: put iOS into the media audio session + unlock.
+    this.unlockAudio();
     // If a loop is set and we're parked outside it, enter at the loop start.
     if (this.loopRegion) {
       const { start, end } = this.loopRegion;
@@ -240,6 +300,7 @@ export class AudioEngine {
     const t = this.currentTime;
     this.stopSources();
     this.video.pause();
+    this.silentEl.pause();
     this.playing = false;
     this.startOffset = Math.min(t, this.duration);
     if (this.rafId !== null) cancelAnimationFrame(this.rafId);
@@ -363,6 +424,8 @@ export class AudioEngine {
     this.video.removeEventListener('playing', this.handleResume);
     if (this.rafId !== null) cancelAnimationFrame(this.rafId);
     this.stopSources();
+    this.silentEl.pause();
+    this.silentEl.removeAttribute('src');
     this.ctx.close();
   }
 }
