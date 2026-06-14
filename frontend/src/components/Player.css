@@ -62,9 +62,9 @@
    exactly and the resize handle stays on the video's bottom-right corner. */
 .video-holder.pip .video { height: 100%; }
 .pip-resize {
-  position: absolute; right: 0; bottom: 0; width: 20px; height: 20px;
-  cursor: nwse-resize; touch-action: none; z-index: 6;
-  background: linear-gradient(135deg, transparent 45%, rgba(255, 255, 255, 0.7) 45%, rgba(255, 255, 255, 0.7) 55%, transparent 55%);
+  position: absolute; left: 0; bottom: 0; width: 20px; height: 20px;
+  cursor: nesw-resize; touch-action: none; z-index: 6;
+  background: linear-gradient(45deg, transparent 45%, rgba(255, 255, 255, 0.7) 45%, rgba(255, 255, 255, 0.7) 55%, transparent 55%);
 }
 
 /* Spinner */
@@ -86,13 +86,94 @@
 
 /* Big tap-to-play button shown over the video when ready & paused. Sits below the
    PiP swap/resize controls (z 4/6) so those stay tappable. */
+/* Just the centered circle (not a full-cover button), so the rest of the video
+   stays draggable as a PiP and the guide tools underneath stay reachable. */
 .play-overlay {
-  position: absolute; inset: 0; z-index: 3;
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 3;
   display: flex; align-items: center; justify-content: center;
   background: none; border: none; padding: 0; cursor: pointer;
 }
 .play-overlay svg { filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5)); transition: transform 0.12s; }
 .play-overlay:hover svg { transform: scale(1.06); }
+
+/* ---- Video tools overlay (gear button + draggable guide lines) ---- */
+/* The wrapper fills the video but is click-through; only its children catch events. */
+.video-guides { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.guide-clip { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+
+.guide-line { position: absolute; pointer-events: auto; touch-action: none; }
+.guide-line.v {
+  top: 0; bottom: 0; width: 20px; transform: translateX(-50%);
+  cursor: ew-resize; display: flex; justify-content: center;
+}
+.guide-line.v::before {
+  content: ''; width: 2px; height: 100%;
+  background: #ff5d5d; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+.guide-line.h {
+  left: 0; right: 0; height: 20px; transform: translateY(-50%);
+  cursor: ns-resize; display: flex; align-items: center;
+}
+.guide-line.h::before {
+  content: ''; height: 2px; width: 100%;
+  background: #4ad9ff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+/* Spotlight rectangle: SVG darkens everything outside the box; the frame is a
+   draggable/resizable border. */
+.rect-mask { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.draw-surface { position: absolute; inset: 0; pointer-events: auto; cursor: crosshair; touch-action: none; }
+.rect-frame {
+  position: absolute; box-sizing: border-box; pointer-events: none;
+  border: 1.5px solid rgba(255, 255, 255, 0.9); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+/* Resize-only: a small, subtle dot centered in a large transparent touch area
+   (so it's easy to grab with a finger). Positioned (left/top %) right on the corner
+   and pulled back 50% so the whole grip centers on it — and it lives in a NON-clipped
+   layer, so the outer half of the grip isn't cut off at the box edge. */
+.rh {
+  position: absolute; width: 38px; height: 38px; pointer-events: auto; z-index: 5;
+  transform: translate(-50%, -50%); background: transparent; touch-action: none;
+  display: flex; align-items: center; justify-content: center;
+}
+.rh::before {
+  content: ''; width: 12px; height: 12px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+.rh-nw, .rh-se { cursor: nwse-resize; }
+.rh-ne, .rh-sw { cursor: nesw-resize; }
+
+.vtools {
+  position: absolute; right: 10px; bottom: 10px;
+  display: flex; flex-direction: column-reverse; align-items: center; gap: 8px;
+  pointer-events: none;
+}
+.vtools-toggle, .vtool {
+  pointer-events: auto; width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.35); color: #fff;
+  background: rgba(20, 24, 32, 0.32); cursor: pointer;
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+  transition: background 0.15s, opacity 0.15s, transform 0.12s;
+}
+.vtools-toggle { opacity: 0.45; }
+.vtools.open .vtools-toggle, .vtools-toggle:hover { opacity: 1; }
+.vtools.open .vtools-toggle { background: rgba(45, 130, 220, 0.55); transform: rotate(30deg); }
+.vtool:hover, .vtools-toggle:hover { background: rgba(40, 48, 64, 0.7); }
+.vtool.active { background: rgba(45, 130, 220, 0.6); border-color: rgba(120, 180, 255, 0.8); }
+.vtool:disabled { opacity: 0.35; cursor: default; }
+.vtools-actions { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+/* On the floating PiP: keep the gear in the bottom-right (consistent with every
+   other view) and just shrink the buttons to suit the smaller video. The resize
+   grip moves to the bottom-left instead (see .pip-resize). */
+.video-holder.pip .vtools { right: 6px; left: auto; bottom: 6px; gap: 6px; }
+.video-holder.pip .vtools-toggle, .video-holder.pip .vtool { width: 28px; height: 28px; }
+.video-holder.pip .vtools-toggle svg { width: 16px; height: 16px; }
+.video-holder.pip .vtool svg { width: 15px; height: 15px; }
+/* Desktop fullscreen with the video in the main spot: the holder fills the screen
+   and the transport bar sits at bottom:0, so lift the gear above it (still bottom-
+   right of the video). */
+.stage.fs .video-holder:not(.pip) .vtools { bottom: 72px; right: 16px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Graphs */
@@ -114,7 +195,7 @@
 .graph-wrap:hover .maximize-btn { opacity: 1; }
 .maximize-btn:hover { background: #232c3d; color: #fff; }
 .maximize-btn.active { opacity: 1; background: #4f9dff; border-color: #4f9dff; color: #07101f; }
-.video-max { position: absolute; top: 8px; left: 8px; right: auto; opacity: 0.85; z-index: 4; }
+.video-max { position: absolute; top: 8px; left: 8px; right: auto; opacity: 0.85; z-index: 7; }
 
 /* On-graph controls: mute + maximize. */
 .graph-controls { position: absolute; top: 6px; right: 6px; display: flex; gap: 5px; z-index: 2; }
