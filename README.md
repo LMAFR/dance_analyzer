@@ -139,6 +139,15 @@ Conclusions:
 - **GPU separation for speed.** Demucs is the CPU-bound bottleneck. TODO: try
   offloading separation to a GPU host (e.g. RunPod / Vast.ai) — Demucs runs
   ~10× faster on GPU — to cut upload-to-ready time.
+- **Export honouring the spotlight rectangle.** The video-tools spotlight
+  rectangle is currently a view-only overlay (it darkens outside the box but isn't
+  baked into the exported clip). TODO: let the user choose, when exporting, between
+  (a) **cropping** to just the spotlighted box, or (b) the full video frame as seen
+  (optionally with the darkening burned in). Not hard: the rectangle is stored as
+  fractions of the video box, so it maps to an ffmpeg `crop=w:h:x:y` filter (×
+  source dimensions) in `export_clip()`; pass the rect (and mode) from the export UI
+  through `exportClip` to the backend. The only fiddly part is mapping fractions to
+  even pixel values and keeping it in sync with the video's display vs. encoded size.
 
 ## Notes
 
