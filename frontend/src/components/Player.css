@@ -63,7 +63,7 @@
 .video-holder.pip .video { height: 100%; }
 .pip-resize {
   position: absolute; right: 0; bottom: 0; width: 20px; height: 20px;
-  cursor: nwse-resize; touch-action: none;
+  cursor: nwse-resize; touch-action: none; z-index: 6;
   background: linear-gradient(135deg, transparent 45%, rgba(255, 255, 255, 0.7) 45%, rgba(255, 255, 255, 0.7) 55%, transparent 55%);
 }
 
@@ -83,6 +83,16 @@
   background: rgba(0, 0, 0, 0.32);
 }
 .buffering-overlay .spinner { width: 30px; height: 30px; }
+
+/* Big tap-to-play button shown over the video when ready & paused. Sits below the
+   PiP swap/resize controls (z 4/6) so those stay tappable. */
+.play-overlay {
+  position: absolute; inset: 0; z-index: 3;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none; padding: 0; cursor: pointer;
+}
+.play-overlay svg { filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5)); transition: transform 0.12s; }
+.play-overlay:hover svg { transform: scale(1.06); }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Graphs */

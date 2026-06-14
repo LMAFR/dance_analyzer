@@ -37,6 +37,13 @@ const MaximizeIcon = () => (
   </svg>
 );
 
+const PlayCircleIcon = () => (
+  <svg width="68" height="68" viewBox="0 0 68 68" fill="none">
+    <circle cx="34" cy="34" r="32" fill="rgba(0,0,0,0.55)" stroke="rgba(255,255,255,0.92)" strokeWidth="2.5" />
+    <polygon points="28,22 28,46 48,34" fill="#fff" />
+  </svg>
+);
+
 const KebabIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
     <circle cx="12" cy="5" r="2" />
@@ -571,10 +578,12 @@ export function Player({ trackId, videoUrl, poster, stems }: PlayerProps) {
           </div>
         )}
       </div>
-      <button className="btn" onClick={toggleFullscreen} title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
-        <span className="btn-icon"><MaximizeIcon /></span>
-        <span className="btn-label">{fullscreen ? 'Exit FS' : 'Fullscreen'}</span>
-      </button>
+      {!isMobile && (
+        <button className="btn" onClick={toggleFullscreen} title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
+          <span className="btn-icon"><MaximizeIcon /></span>
+          <span className="btn-label">{fullscreen ? 'Exit FS' : 'Fullscreen'}</span>
+        </button>
+      )}
     </div>
   );
 
@@ -611,6 +620,11 @@ export function Player({ trackId, videoUrl, poster, stems }: PlayerProps) {
           />
           {(buffering || (!ready && pipActive && !loadError)) && (
             <div className="buffering-overlay"><div className="spinner" /></div>
+          )}
+          {ready && !playing && !buffering && !loadError && (
+            <button className="play-overlay" onClick={togglePlay} aria-label="Play">
+              <PlayCircleIcon />
+            </button>
           )}
           {swapped && (
             <button className="maximize-btn video-max" onPointerDown={(e) => e.stopPropagation()}
