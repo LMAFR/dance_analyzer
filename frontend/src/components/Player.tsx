@@ -18,6 +18,7 @@ export interface StemConfig {
 interface PlayerProps {
   trackId: string;
   videoUrl: string;
+  poster: string | null;
   stems: StemConfig[];
 }
 
@@ -68,7 +69,7 @@ const MuteIcon = ({ muted }: { muted: boolean }) => (
   </svg>
 );
 
-export function Player({ trackId, videoUrl, stems }: PlayerProps) {
+export function Player({ trackId, videoUrl, poster, stems }: PlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<AudioEngine | null>(null);
@@ -82,6 +83,9 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   const [envelopes, setEnvelopes] = useState<Record<string, number[]>>({});
   const [muted, setMuted] = useState<Record<string, boolean>>({});
   const [fullscreen, setFullscreen] = useState(false);
+  // 'real' = native Fullscreen API; 'pseudo' = CSS full-viewport fallback for iOS
+  // Safari, which doesn't support requestFullscreen on non-<video> elements.
+  const fsMode = useRef<'real' | 'pseudo' | null>(null);
   const [swapped, setSwapped] = useState(false);
   const [videoAspect, setVideoAspect] = useState<number | undefined>(undefined);
   const [featured, setFeatured] = useState<Set<string>>(() => new Set(stems.map((s) => s.id)));
@@ -157,7 +161,10 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   }, []);
 
   useEffect(() => {
-    const onFs = () => setFullscreen(!!document.fullscreenElement);
+    const onFs = () => {
+      if (document.fullscreenElement) { fsMode.current = 'real'; setFullscreen(true); }
+      else if (fsMode.current === 'real') { fsMode.current = null; setFullscreen(false); }
+    };
     document.addEventListener('fullscreenchange', onFs);
     return () => document.removeEventListener('fullscreenchange', onFs);
   }, []);
@@ -227,15 +234,23 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   const toggleFullscreen = useCallback(() => {
     const stage = stageRef.current;
     if (!stage) return;
-    if (!document.fullscreenElement) {
-      // On phones, fullscreen means "video big" — graphs-in-main fullscreen looks
-      // the same as windowed, so force video-in-main first.
-      if (isMobile) setSwapped(false);
-      stage.requestFullscreen?.();
-    } else {
-      document.exitFullscreen?.();
+    if (fullscreen) {
+      // Exit (real via the API, or just clear the pseudo flag).
+      if (fsMode.current === 'real') document.exitFullscreen?.();
+      else { fsMode.current = null; setFullscreen(false); }
+      return;
     }
-  }, [isMobile]);
+    // On phones, fullscreen means "video big" — graphs-in-main fullscreen looks
+    // the same as windowed, so force video-in-main first.
+    if (isMobile) setSwapped(false);
+    // Try the native API; fall back to a CSS pseudo-fullscreen (iOS Safari).
+    if (stage.requestFullscreen) {
+      stage.requestFullscreen().catch(() => { fsMode.current = 'pseudo'; setFullscreen(true); });
+    } else {
+      fsMode.current = 'pseudo';
+      setFullscreen(true);
+    }
+  }, [isMobile, fullscreen]);
 
   const onPick = useCallback(
     (t: number) => {
@@ -584,7 +599,7 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
           onPointerUp={pipActive ? onPipPointerUp : undefined}
         >
           <video
-            ref={videoRef} src={videoUrl} className="video" playsInline preload="auto"
+            ref={videoRef} src={videoUrl} poster={poster ?? undefined} className="video" playsInline preload="auto"
             onLoadedMetadata={(e) => {
               const v = e.currentTarget;
               if (v.videoWidth && v.videoHeight) setVideoAspect(v.videoWidth / v.videoHeight);

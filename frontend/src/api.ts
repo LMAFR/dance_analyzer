@@ -14,6 +14,7 @@ export interface Manifest {
   id: string;
   duration: number;
   video: string;
+  poster: string | null;
   stems: { id: string; url: string }[];
   envelopes: string | null;
   ready: boolean;

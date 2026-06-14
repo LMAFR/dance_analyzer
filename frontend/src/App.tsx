@@ -22,6 +22,7 @@ export default function App() {
   );
   const [phase, setPhase] = useState<Phase>('loading');
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [stems, setStems] = useState<StemConfig[]>([]);
   const [progress, setProgress] = useState(0);
   const [stage, setStage] = useState('');
@@ -33,6 +34,7 @@ export default function App() {
     let misses = 0;
     setPhase('loading');
     setVideoUrl(null);
+    setPosterUrl(null);
     setStems([]);
 
     const poll = async () => {
@@ -41,6 +43,7 @@ export default function App() {
         if (cancelled) return;
         misses = 0;
         setVideoUrl(trackFileUrl(trackId, manifest.video));
+        setPosterUrl(manifest.poster ? trackFileUrl(trackId, manifest.poster) : null);
 
         if (manifest.ready && manifest.envelopes) {
           const env = await getEnvelopes(trackId, manifest.envelopes);
@@ -96,6 +99,7 @@ export default function App() {
     setTrackId(null);
     setPhase('loading');
     setVideoUrl(null);
+    setPosterUrl(null);
     setStems([]);
     setError(null);
   };
@@ -123,10 +127,10 @@ export default function App() {
       {trackId && phase === 'loading' && <p className="status">Loading track…</p>}
       {trackId && phase === 'error' && <p className="status error">{error}</p>}
       {trackId && phase === 'processing' && videoUrl && (
-        <Processing videoUrl={videoUrl} progress={progress} stage={stage} />
+        <Processing videoUrl={videoUrl} poster={posterUrl} progress={progress} stage={stage} />
       )}
       {trackId && phase === 'ready' && videoUrl && (
-        <Player trackId={trackId} videoUrl={videoUrl} stems={stems} />
+        <Player trackId={trackId} videoUrl={videoUrl} poster={posterUrl} stems={stems} />
       )}
     </div>
   );
