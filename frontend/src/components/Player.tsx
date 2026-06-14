@@ -440,7 +440,7 @@ export function Player({ trackId, videoUrl, poster, stems }: PlayerProps) {
         <MuteIcon muted={!!muted[id]} />
       </button>
       <button
-        className={`gbtn ${inMain ? 'active' : ''}`}
+        className={`gbtn maximize ${inMain ? 'active' : ''}`}
         onClick={() => maximizeGraph(id)}
         title={inMain ? 'Remove from main view' : 'Show this graph in the main view'}
       >

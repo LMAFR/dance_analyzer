@@ -211,6 +211,17 @@
 .gbtn.active { opacity: 1; background: #4f9dff; border-color: #4f9dff; color: #07101f; }
 .gbtn.muted { opacity: 1; background: #3a2330; border-color: #ff6b6b; color: #ff9b9b; }
 
+/* Expand (maximize to main view) toggle buttons use a red color scheme — issue #8. */
+.maximize-btn, .gbtn.maximize {
+  border-color: #b53b4a; color: #ff8585;
+}
+.maximize-btn:hover, .gbtn.maximize:hover {
+  background: #3a2330; border-color: #ff6b6b; color: #ffb3b3;
+}
+.maximize-btn.active, .gbtn.maximize.active {
+  background: #e23b50; border-color: #e23b50; color: #fff;
+}
+
 .graphs { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .player.swapped .graphs { gap: 12px; }
 .rail-graphs { display: flex; flex-direction: column; gap: 8px; }
