@@ -127,17 +127,22 @@
   position: absolute; box-sizing: border-box; pointer-events: none;
   border: 1.5px solid rgba(255, 255, 255, 0.9); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
 }
-/* Resize-only: small, subtle corner grips. The frame body stays click-through so
+/* Resize-only: a small, subtle dot centered in a large transparent touch area
+   (so it's easy to grab with a finger). The frame body stays click-through so
    guide lines and play stay reachable inside the box. */
 .rh {
-  position: absolute; width: 9px; height: 9px; pointer-events: auto;
-  background: rgba(255, 255, 255, 0.85); border-radius: 50%;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4); touch-action: none;
+  position: absolute; width: 30px; height: 30px; pointer-events: auto;
+  background: transparent; touch-action: none;
+  display: flex; align-items: center; justify-content: center;
 }
-.rh-nw { left: -4.5px; top: -4.5px; cursor: nwse-resize; }
-.rh-ne { right: -4.5px; top: -4.5px; cursor: nesw-resize; }
-.rh-sw { left: -4.5px; bottom: -4.5px; cursor: nesw-resize; }
-.rh-se { right: -4.5px; bottom: -4.5px; cursor: nwse-resize; }
+.rh::before {
+  content: ''; width: 11px; height: 11px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+.rh-nw { left: -15px; top: -15px; cursor: nwse-resize; }
+.rh-ne { right: -15px; top: -15px; cursor: nesw-resize; }
+.rh-sw { left: -15px; bottom: -15px; cursor: nesw-resize; }
+.rh-se { right: -15px; bottom: -15px; cursor: nwse-resize; }
 
 .vtools {
   position: absolute; right: 10px; bottom: 10px;
