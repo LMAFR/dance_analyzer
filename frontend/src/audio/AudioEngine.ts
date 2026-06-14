@@ -104,10 +104,12 @@ export class AudioEngine {
   /** Fired when playback pauses to wait for the video (true) and resumes (false). */
   onBuffering: ((buffering: boolean) => void) | null = null;
 
-  /** True while the audio is paused waiting for a stalled video. Driven purely by
-      the video's 'waiting'/'playing' events (the browser debounces those), so it
-      doesn't oscillate per-frame. */
+  /** True while we're holding everything (audio + clock + video) because the video
+      can't play yet. Entered on the video's 'waiting'/'stalled' when it genuinely
+      lacks data; exited once it can play again (readyState recovers). */
   private buffering = false;
+  /** Guards against firing video.play() repeatedly while a resume is in flight. */
+  private resuming = false;
 
   /** Inaudible looping element used to put iOS into the media audio session. */
   private silentEl: HTMLAudioElement;
@@ -147,24 +149,40 @@ export class AudioEngine {
     this.audioUnlocked = true;
   }
 
-  // When the video stalls, suspend the audio clock so time/graphs wait for it.
-  private handleStall = () => { if (this.playing) this.enterBuffering(); };
+  // The video is the only streamed part (stems are decoded in memory), so it's the
+  // thing that can run short of data. When it can't play, hold EVERYTHING; resume
+  // once it can play again. readyState >= 3 (HAVE_FUTURE_DATA) means "can play".
+  private handleStall = () => {
+    if (this.playing && this.video.readyState < 3) this.enterBuffering();
+  };
   private handleResume = () => { this.exitBuffering(); };
 
   private enterBuffering() {
     if (this.buffering) return;
     this.buffering = true;
-    this.ctx.suspend().catch(() => {}); // freezes ctx.currentTime -> media time
+    this.video.pause();                 // freeze the video too, so it can't run ahead
+    this.ctx.suspend().catch(() => {});  // freezes ctx.currentTime -> media time/graphs
     this.onBuffering?.(true);
   }
 
+  // Called from the rAF loop (and the 'playing' event) — resumes only once the video
+  // can actually play, and only flips off the spinner after the video really resumes,
+  // so audio never plays ahead of a still-frozen video.
   private exitBuffering() {
-    if (!this.buffering) return;
-    this.buffering = false;
-    // No re-seek here: the video resumes where it stalled (≈ the frozen audio
-    // position) and the normal drift-nudge re-aligns it — avoids a visible blink.
-    this.ctx.resume().catch(() => {});
-    this.onBuffering?.(false);
+    if (!this.buffering || this.resuming) return;
+    if (this.video.readyState < 3) return; // not ready yet -> keep holding
+    this.resuming = true;
+    this.video.currentTime = this.currentTime; // align video to the frozen audio clock
+    this.video.playbackRate = this._rate;
+    Promise.resolve(this.video.play()).then(() => {
+      this.resuming = false;
+      if (!this.buffering) return;
+      this.buffering = false;
+      this.ctx.resume().catch(() => {}); // unfreeze audio + clock together with video
+      this.onBuffering?.(false);
+    }).catch(() => {
+      this.resuming = false; // couldn't resume yet; the loop will retry
+    });
   }
 
   /** Fetch + decode every stem and wire gain nodes. */
@@ -354,10 +372,11 @@ export class AudioEngine {
   private loop = () => {
     if (!this.playing) return;
 
-    // Waiting for a stalled video: audio is suspended (so time/graphs are
-    // frozen too); resume once the video has caught up.
+    // Holding for a video that ran short of data: everything (audio, clock, video)
+    // is frozen. Keep trying to resume — exitBuffering only proceeds once the video
+    // can actually play again, so we don't depend on the 'playing' event firing.
     if (this.buffering) {
-      // Audio is suspended; just wait for the video's 'playing' event to resume.
+      this.exitBuffering();
       this.rafId = requestAnimationFrame(this.loop);
       return;
     }
