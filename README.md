@@ -136,6 +136,9 @@ Conclusions:
 - **Landscape source videos untested.** Only portrait clips have been tried.
   TODO: verify the player, PiP, fullscreen (cover-fit), and aspect handling with
   landscape (wide) videos, primarily on desktop.
+- **GPU separation for speed.** Demucs is the CPU-bound bottleneck. TODO: try
+  offloading separation to a GPU host (e.g. RunPod / Vast.ai) — Demucs runs
+  ~10× faster on GPU — to cut upload-to-ready time.
 
 ## Notes
 

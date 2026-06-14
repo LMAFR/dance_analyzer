@@ -18,6 +18,7 @@ export interface StemConfig {
 interface PlayerProps {
   trackId: string;
   videoUrl: string;
+  poster: string | null;
   stems: StemConfig[];
 }
 
@@ -33,6 +34,13 @@ const MaximizeIcon = () => (
     <polyline points="20 9 20 4 15 4" />
     <polyline points="4 15 4 20 9 20" />
     <polyline points="20 15 20 20 15 20" />
+  </svg>
+);
+
+const PlayCircleIcon = () => (
+  <svg width="68" height="68" viewBox="0 0 68 68" fill="none">
+    <circle cx="34" cy="34" r="32" fill="rgba(0,0,0,0.55)" stroke="rgba(255,255,255,0.92)" strokeWidth="2.5" />
+    <polygon points="28,22 28,46 48,34" fill="#fff" />
   </svg>
 );
 
@@ -68,13 +76,12 @@ const MuteIcon = ({ muted }: { muted: boolean }) => (
   </svg>
 );
 
-export function Player({ trackId, videoUrl, stems }: PlayerProps) {
+export function Player({ trackId, videoUrl, poster, stems }: PlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<AudioEngine | null>(null);
 
-  const [ready, setReady] = useState(false);
-  const [videoReady, setVideoReady] = useState(false);
+  const [ready, setReady] = useState(false); // stems decoded & ready to play
   const [buffering, setBuffering] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -83,6 +90,9 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   const [envelopes, setEnvelopes] = useState<Record<string, number[]>>({});
   const [muted, setMuted] = useState<Record<string, boolean>>({});
   const [fullscreen, setFullscreen] = useState(false);
+  // 'real' = native Fullscreen API; 'pseudo' = CSS full-viewport fallback for iOS
+  // Safari, which doesn't support requestFullscreen on non-<video> elements.
+  const fsMode = useRef<'real' | 'pseudo' | null>(null);
   const [swapped, setSwapped] = useState(false);
   const [videoAspect, setVideoAspect] = useState<number | undefined>(undefined);
   const [featured, setFeatured] = useState<Set<string>>(() => new Set(stems.map((s) => s.id)));
@@ -111,7 +121,6 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
     const video = videoRef.current;
     if (!video) return;
     setReady(false);
-    setVideoReady(false);
     setLoadError(null);
     let disposed = false;
     const engine = new AudioEngine(video);
@@ -159,7 +168,10 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   }, []);
 
   useEffect(() => {
-    const onFs = () => setFullscreen(!!document.fullscreenElement);
+    const onFs = () => {
+      if (document.fullscreenElement) { fsMode.current = 'real'; setFullscreen(true); }
+      else if (fsMode.current === 'real') { fsMode.current = null; setFullscreen(false); }
+    };
     document.addEventListener('fullscreenchange', onFs);
     return () => document.removeEventListener('fullscreenchange', onFs);
   }, []);
@@ -229,15 +241,23 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   const toggleFullscreen = useCallback(() => {
     const stage = stageRef.current;
     if (!stage) return;
-    if (!document.fullscreenElement) {
-      // On phones, fullscreen means "video big" — graphs-in-main fullscreen looks
-      // the same as windowed, so force video-in-main first.
-      if (isMobile) setSwapped(false);
-      stage.requestFullscreen?.();
-    } else {
-      document.exitFullscreen?.();
+    if (fullscreen) {
+      // Exit (real via the API, or just clear the pseudo flag).
+      if (fsMode.current === 'real') document.exitFullscreen?.();
+      else { fsMode.current = null; setFullscreen(false); }
+      return;
     }
-  }, [isMobile]);
+    // On phones, fullscreen means "video big" — graphs-in-main fullscreen looks
+    // the same as windowed, so force video-in-main first.
+    if (isMobile) setSwapped(false);
+    // Try the native API; fall back to a CSS pseudo-fullscreen (iOS Safari).
+    if (stage.requestFullscreen) {
+      stage.requestFullscreen().catch(() => { fsMode.current = 'pseudo'; setFullscreen(true); });
+    } else {
+      fsMode.current = 'pseudo';
+      setFullscreen(true);
+    }
+  }, [isMobile, fullscreen]);
 
   const onPick = useCallback(
     (t: number) => {
@@ -392,7 +412,6 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
   }, [view, playing, time, duration]);
 
   const isActive = (id: string) => !muted[id];
-  const loading = !ready || !videoReady;
 
   // On phones we keep it simple: all three graphs live in the main area (no
   // featured/rail split), and the video floats as a PiP over them.
@@ -512,7 +531,7 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
 
   const transport = (
     <div className="transport">
-      <button className="btn play" onClick={togglePlay} disabled={loading}>{playing ? '❚❚' : '▶'}</button>
+      <button className="btn play" onClick={togglePlay} disabled={!ready || !!loadError}>{playing ? '❚❚' : '▶'}</button>
       <span className="time">
         <span className="t-cur">{fmtTime(time)}</span>
         <span className="t-tot"> / {fmtTime(duration)}</span>
@@ -533,7 +552,7 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
         <button
           className={menuOpen ? 'btn active' : 'btn'}
           onClick={() => setMenuOpen((o) => !o)}
-          disabled={loading}
+          disabled={!ready}
           title="More: export & playback speed"
         >
           <span className="btn-icon"><KebabIcon /></span>
@@ -559,10 +578,12 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
           </div>
         )}
       </div>
-      <button className="btn" onClick={toggleFullscreen} title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
-        <span className="btn-icon"><MaximizeIcon /></span>
-        <span className="btn-label">{fullscreen ? 'Exit FS' : 'Fullscreen'}</span>
-      </button>
+      {!isMobile && (
+        <button className="btn" onClick={toggleFullscreen} title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
+          <span className="btn-icon"><MaximizeIcon /></span>
+          <span className="btn-label">{fullscreen ? 'Exit FS' : 'Fullscreen'}</span>
+        </button>
+      )}
     </div>
   );
 
@@ -587,20 +608,23 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
           onPointerUp={pipActive ? onPipPointerUp : undefined}
         >
           <video
-            ref={videoRef} src={videoUrl} className="video" playsInline preload="auto"
+            ref={videoRef} src={videoUrl} poster={poster ?? undefined} className="video" playsInline preload="auto"
             onLoadedMetadata={(e) => {
               const v = e.currentTarget;
               if (v.videoWidth && v.videoHeight) setVideoAspect(v.videoWidth / v.videoHeight);
             }}
-            onLoadedData={() => setVideoReady(true)}
-            onCanPlay={() => setVideoReady(true)}
             onError={() => {
               const err = videoRef.current?.error;
               setLoadError(`Video failed to load${err ? ` (code ${err.code})` : ''}`);
             }}
           />
-          {buffering && (
+          {(buffering || (!ready && pipActive && !loadError)) && (
             <div className="buffering-overlay"><div className="spinner" /></div>
+          )}
+          {ready && !playing && !buffering && !loadError && (
+            <button className="play-overlay" onClick={togglePlay} aria-label="Play">
+              <PlayCircleIcon />
+            </button>
           )}
           {swapped && (
             <button className="maximize-btn video-max" onPointerDown={(e) => e.stopPropagation()}
@@ -615,10 +639,10 @@ export function Player({ trackId, videoUrl, stems }: PlayerProps) {
           <div className="spinner-overlay error">
             <span>⚠ {loadError}</span>
           </div>
-        ) : loading && (
+        ) : !ready && !pipActive && (
           <div className="spinner-overlay">
             <div className="spinner" />
-            <span>{!ready ? 'Loading stems…' : 'Loading video…'}</span>
+            <span>Loading stems…</span>
           </div>
         )}
 

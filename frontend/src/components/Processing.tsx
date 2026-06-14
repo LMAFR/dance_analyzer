@@ -2,6 +2,7 @@ import './Processing.css';
 
 interface ProcessingProps {
   videoUrl: string;
+  poster: string | null;
   progress: number; // 0..1
   stage: string;
 }
@@ -23,14 +24,14 @@ const PLACEHOLDERS = [
 
 // Shown while the stems are still separating: the (already-transcoded) video is
 // fully playable here; the graph panel fills in once separation finishes.
-export function Processing({ videoUrl, progress, stage }: ProcessingProps) {
+export function Processing({ videoUrl, poster, progress, stage }: ProcessingProps) {
   const pct = Math.round(progress * 100);
   const label = STAGE_LABELS[stage] ?? 'Processing';
 
   return (
     <div className="processing-view">
       <div className="pv-stage">
-        <video src={videoUrl} className="pv-video" controls playsInline autoPlay muted />
+        <video src={videoUrl} poster={poster ?? undefined} className="pv-video" controls playsInline autoPlay muted />
       </div>
 
       <aside className="pv-rail">

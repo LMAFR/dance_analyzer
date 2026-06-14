@@ -91,12 +91,24 @@ def _probe_duration(path: Path) -> float:
     return round(float(out.stdout.strip()), 3)
 
 
+def _make_poster(video: Path, out: Path) -> bool:
+    """Grab the first frame as a poster (so the player shows a preview, not black,
+    before the video is played — iOS won't render frame 0 until play). Optional."""
+    try:
+        _run(["ffmpeg", "-y", "-ss", "0", "-i", str(video), "-frames:v", "1",
+              "-q:v", "3", str(out)])
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
 def _write_manifest(tdir: Path, track_id: str, duration: float,
                     stems: dict[str, str], env_name: str | None, ready: bool) -> None:
     manifest = {
         "id": track_id,
         "duration": duration,
         "video": "video.mp4",
+        "poster": "poster.jpg" if (tdir / "poster.jpg").exists() else None,
         "stems": [{"id": sid, "url": path} for sid, path in stems.items()],
         "envelopes": env_name,
         "ready": ready,
@@ -206,6 +218,7 @@ def process_track(
     video_out = tdir / "video.mp4"
     _transcode_web_video(video, video_out)
     duration = _probe_duration(video_out)
+    _make_poster(video_out, tdir / "poster.jpg")  # first-frame preview (avoids black)
     _write_manifest(tdir, track_id, duration, stems={}, env_name=None, ready=False)
     if on_video_ready:
         on_video_ready(duration)
