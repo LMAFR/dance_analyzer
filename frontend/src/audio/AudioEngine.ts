@@ -214,21 +214,21 @@ export class AudioEngine {
     return this.loopRegion;
   }
 
-  async play() {
+  play() {
     if (this.playing) return;
     // If a loop is set and we're parked outside it, enter at the loop start.
     if (this.loopRegion) {
       const { start, end } = this.loopRegion;
       if (this.startOffset < start || this.startOffset >= end) this.startOffset = start;
     }
-    // Start the video FIRST, synchronously inside the user's tap. iOS blocks
-    // video.play() if it's called after an `await` (e.g. ctx.resume()), so the
-    // video would stay black while only the Web Audio stems played.
+    // Everything here must run synchronously within the user's tap: iOS only
+    // unlocks the video (gesture-only play) AND the Web Audio output (first sound
+    // must be started in a gesture) if there's no `await` in between. So we resume
+    // the context without awaiting and start the sources right away.
     this.video.currentTime = this.startOffset;
     this.video.playbackRate = this._rate;
-    const videoPlay = this.video.play();
-    if (videoPlay) videoPlay.catch(() => {});
-    if (this.ctx.state === 'suspended') await this.ctx.resume();
+    this.video.play().catch(() => {});
+    if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
     this.startSourcesAt(this.startOffset);
     this.playing = true;
     this.loop();
