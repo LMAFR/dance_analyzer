@@ -634,7 +634,7 @@ export function Player({ trackId, videoUrl, poster, stems }: PlayerProps) {
             </button>
           )}
           {pipActive && <div className="pip-resize" onPointerDown={onResizeDown} title="Drag to resize" />}
-          {!pipActive && !loadError && <VideoGuides />}
+          {!loadError && <VideoGuides />}
         </div>
 
         {loadError ? (

@@ -82,18 +82,23 @@ export function VideoGuides() {
 
   return (
     <div className="video-guides" ref={wrapRef}>
-      {guides.map((g) => (
-        <div
-          key={g.id}
-          className={`guide-line ${g.axis}`}
-          style={g.axis === 'v' ? { left: `${g.pos * 100}%` } : { top: `${g.pos * 100}%` }}
-          onPointerDown={(e) => onLineDown(e, g)}
-          onPointerMove={onLineMove}
-          onPointerUp={onLineUp}
-        />
-      ))}
+      {/* Lines live in a clipped layer so they never stick out past the video box;
+          the toolbar sits outside it so it isn't clipped on a small PiP. */}
+      <div className="guide-clip">
+        {guides.map((g) => (
+          <div
+            key={g.id}
+            className={`guide-line ${g.axis}`}
+            style={g.axis === 'v' ? { left: `${g.pos * 100}%` } : { top: `${g.pos * 100}%` }}
+            onPointerDown={(e) => onLineDown(e, g)}
+            onPointerMove={onLineMove}
+            onPointerUp={onLineUp}
+          />
+        ))}
+      </div>
 
-      <div className={`vtools ${open ? 'open' : ''}`}>
+      {/* stopPropagation so tapping/dragging the toolbar doesn't drag the PiP. */}
+      <div className={`vtools ${open ? 'open' : ''}`} onPointerDown={(e) => e.stopPropagation()}>
         {open && (
           <div className="vtools-actions">
             <button className="vtool" onClick={() => add('v')} title="Add a vertical guide line" aria-label="Add vertical line">

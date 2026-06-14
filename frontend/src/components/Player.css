@@ -96,7 +96,8 @@
 
 /* ---- Video tools overlay (gear button + draggable guide lines) ---- */
 /* The wrapper fills the video but is click-through; only its children catch events. */
-.video-guides { position: absolute; inset: 0; z-index: 4; pointer-events: none; overflow: hidden; }
+.video-guides { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.guide-clip { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 
 .guide-line { position: absolute; pointer-events: auto; touch-action: none; }
 .guide-line.v {
@@ -135,6 +136,12 @@
 .vtool:hover, .vtools-toggle:hover { background: rgba(40, 48, 64, 0.7); }
 .vtool:disabled { opacity: 0.35; cursor: default; }
 .vtools-actions { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+/* On the floating PiP: move the gear to the bottom-left (the resize grip owns the
+   bottom-right) and shrink the buttons to suit the smaller video. */
+.video-holder.pip .vtools { left: 6px; right: auto; bottom: 6px; gap: 6px; }
+.video-holder.pip .vtools-toggle, .video-holder.pip .vtool { width: 28px; height: 28px; }
+.video-holder.pip .vtools-toggle svg { width: 16px; height: 16px; }
+.video-holder.pip .vtool svg { width: 15px; height: 15px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Graphs */
@@ -156,7 +163,7 @@
 .graph-wrap:hover .maximize-btn { opacity: 1; }
 .maximize-btn:hover { background: #232c3d; color: #fff; }
 .maximize-btn.active { opacity: 1; background: #4f9dff; border-color: #4f9dff; color: #07101f; }
-.video-max { position: absolute; top: 8px; left: 8px; right: auto; opacity: 0.85; z-index: 4; }
+.video-max { position: absolute; top: 8px; left: 8px; right: auto; opacity: 0.85; z-index: 7; }
 
 /* On-graph controls: mute + maximize. */
 .graph-controls { position: absolute; top: 6px; right: 6px; display: flex; gap: 5px; z-index: 2; }
