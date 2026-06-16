@@ -436,6 +436,7 @@ export function Player({ trackId, videoUrl, poster, stems }: PlayerProps) {
         className={`gbtn ${muted[id] ? 'muted' : ''}`}
         onClick={() => toggleMute(id)}
         title={muted[id] ? 'Unmute' : 'Mute'}
+        aria-label={muted[id] ? 'Unmute' : 'Mute'}
       >
         <MuteIcon muted={!!muted[id]} />
       </button>
@@ -443,6 +444,7 @@ export function Player({ trackId, videoUrl, poster, stems }: PlayerProps) {
         className={`gbtn ${inMain ? 'active' : ''}`}
         onClick={() => maximizeGraph(id)}
         title={inMain ? 'Remove from main view' : 'Show this graph in the main view'}
+        aria-label={inMain ? 'Remove this graph from the main view' : 'Show this graph in the main view'}
       >
         <MaximizeIcon />
       </button>
@@ -536,7 +538,8 @@ export function Player({ trackId, videoUrl, poster, stems }: PlayerProps) {
 
   const transport = (
     <div className="transport">
-      <button className="btn play" onClick={togglePlay} disabled={!ready || !!loadError}>{playing ? '❚❚' : '▶'}</button>
+      <button className="btn play" onClick={togglePlay} disabled={!ready || !!loadError}
+        title={playing ? 'Pause' : 'Play'} aria-label={playing ? 'Pause' : 'Play'}>{playing ? '❚❚' : '▶'}</button>
       <span className="time">
         <span className="t-cur">{fmtTime(time)}</span>
         <span className="t-tot"> / {fmtTime(duration)}</span>
@@ -559,6 +562,7 @@ export function Player({ trackId, videoUrl, poster, stems }: PlayerProps) {
           onClick={() => setMenuOpen((o) => !o)}
           disabled={!ready}
           title="More: export & playback speed"
+          aria-label="More options: export and playback speed"
         >
           <span className="btn-icon"><KebabIcon /></span>
         </button>
@@ -633,7 +637,8 @@ export function Player({ trackId, videoUrl, poster, stems }: PlayerProps) {
           )}
           {swapped && (
             <button className="maximize-btn video-max" onPointerDown={(e) => e.stopPropagation()}
-              onClick={maximizeVideo} title="Show the video in the main view">
+              onClick={maximizeVideo} title="Show the video in the main view"
+              aria-label="Show the video in the main view">
               <MaximizeIcon />
             </button>
           )}
